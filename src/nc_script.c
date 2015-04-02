@@ -12,6 +12,8 @@
 #include <nc_script.h>
 #include <nc_stats.h>
 
+#define MAX_PATH_LEN 1000
+
 static int 
 split(lua_State *L) 
 {
@@ -195,8 +197,20 @@ ffi_server_disconnect(struct server *server)
 }
 
 void
-ffi_slots_set_replicaset(struct server_pool *pool, 
-                         struct replicaset *rs, 
+ffi_slots_lock(struct server_pool *pool) {
+    log_debug(LOG_VERB, "lock slots to update");
+    pthread_mutex_lock(&pool->slots_mutex);
+}
+
+void
+ffi_slots_unlock(struct server_pool *pool) {
+    log_debug(LOG_VERB, "unlock slots. update done");
+    pthread_mutex_unlock(&pool->slots_mutex);
+}
+
+void
+ffi_slots_set_replicaset(struct server_pool *pool,
+                         struct replicaset *rs,
                          int left, int right)
 {
     int i;
@@ -254,16 +268,62 @@ ffi_stats_reset(struct server_pool *pool) {
     stats_reset(st, &ctx->pool);
 }
 
+static int
+set_lua_path(lua_State* L, const char* path)
+{
+    /* save the package.path var */
+    char lua_path[MAX_PATH_LEN] = {'\0'};
+    char *str;
+    lua_getglobal(L, "package");
+
+    /* get field "path" from table at top of stack (-1) */
+    lua_getfield(L, -1, "path");
+
+    /* grab path string from top of stack */
+    str = lua_tostring(L, -1);
+
+    log_debug(LOG_VERB, "get lua package.path %s", str);
+
+    strcat(lua_path, str);
+    strcat(lua_path, ";");
+    strcat(lua_path, path);
+    strcat(lua_path, "/?.lua");
+
+    /* get rid of the string on the stack we just pushed */
+    lua_pop(L, 1);
+
+    /* push the new one */
+    lua_pushstring(L, lua_path);
+
+    log_debug(LOG_VERB, "set lua package.path %s", lua_path);
+
+    /* set the field "path" in table at -2 with value at top of stack */
+    lua_setfield(L, -2, "path");
+
+    /* get rid of package table from top of stack */
+    lua_pop(L, 1);
+    return 0;
+}
+
 /* init */
 rstatus_t
-script_init(struct server_pool *pool)
+script_init(struct server_pool *pool, const char *lua_path)
 {
     lua_State *L;
 
     L = luaL_newstate();                        /* Create Lua state variable */
     pool->L = L;
     luaL_openlibs(L);                           /* Load Lua libraries */
-    if (luaL_loadfile(L, "lua/redis.lua")) {
+    char path[MAX_PATH_LEN] = {'\0'};
+    char *lua_name = "redis.lua";
+
+    strcat(path, lua_path);
+    strcat(path, "/");
+    strcat(path, lua_name);
+
+    set_lua_path(L, lua_path);
+
+    if (luaL_loadfile(L, path)) {
         log_debug(LOG_VERB, "init lua script failed - %s", lua_tostring(L, -1));
         return NC_ERROR;
     }
