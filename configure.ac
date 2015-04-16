@@ -202,6 +202,9 @@ AC_CONFIG_COMMANDS_PRE([tar xvfz contrib/yaml-0.1.4.tar.gz -C contrib])
 # Call yaml-0.1.4 ./configure recursively
 AC_CONFIG_SUBDIRS([contrib/yaml-0.1.4])
 
+# Untar the LuaJIT-2.0.3 in contrib/ before config.status is rerun
+AC_CONFIG_COMMANDS_PRE([tar xvfz contrib/LuaJIT-2.0.3.tar.gz -C contrib])
+
 # Define Makefiles
 AC_CONFIG_FILES([Makefile
                  contrib/Makefile
