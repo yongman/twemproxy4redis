@@ -3032,7 +3032,10 @@ redis_pool_tick(struct server_pool *pool)
         
         idx = random() % 16384;
         if (pool->slots[idx] == NULL) {
-            server = *(struct server**)array_get(&pool->server, 0);
+            int s_cnt = array_n(&pool->server);
+            int s_idx = s_cnt == 0 ? 0 : random() % array_n(&pool->server);
+            server = *(struct server**)array_get(&pool->server, s_idx);
+            log_debug(LOG_VERB, "slot[%d] is nil, request server :%d", idx, server->port);
         } else {
             for (i = 0; i < NC_MAXTAGNUM; i++) {
                 uint32_t n;
@@ -3046,6 +3049,7 @@ redis_pool_tick(struct server_pool *pool)
                 server = *(struct server**)array_get(slaves, n);
                 break;
             }
+            log_debug(LOG_VERB, "slot[%d] is not nil, request server :%d", idx, server->port);
         }
 
         if (server == NULL) {
