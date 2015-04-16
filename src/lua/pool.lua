@@ -15,6 +15,8 @@ ffi.cdef[[
 
       rstatus_t ffi_stats_reset(struct server_pool *pool);
 
+      void ffi_slots_clear_replicasets(struct server_pool *pool);
+
       void ffi_slots_lock(struct server_pool *pool);
       void ffi_slots_unlock(struct server_pool *pool);
 ]]
@@ -174,6 +176,10 @@ end
 
 function _M.bind_slots(self)
    C.ffi_slots_lock(__pool)
+
+   -- clear all slots replica sets
+   C.ffi_slots_clear_replicasets(__pool)
+
    for _,rs in ipairs(self.replica_sets) do
       rs:bind_slots()
    end

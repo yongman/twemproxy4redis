@@ -209,6 +209,17 @@ ffi_slots_unlock(struct server_pool *pool) {
 }
 
 void
+ffi_slots_clear_replicasets(struct server_pool *pool)
+{
+    int i;
+
+    log_debug(LOG_VVERB, "script: clear all slots");
+
+    memset(pool->slots, NULL,
+           REDIS_CLUSTER_SLOTS * sizeof(struct replicaset  *));
+}
+
+void
 ffi_slots_set_replicaset(struct server_pool *pool,
                          struct replicaset *rs,
                          int left, int right)
@@ -363,7 +374,7 @@ script_call(struct server_pool *pool, const uint8_t *body, int len, const char *
     struct replicaset *last_rs = NULL;
     for (i = 0; i < REDIS_CLUSTER_SLOTS; i++) {
         struct replicaset *rs = pool->slots[i];
-        if (last_rs != rs) {
+        if (rs && last_rs != rs) {
             last_rs = rs;
             log_debug(LOG_VERB, "slot %5d master %.*s tags[%d,%d,%d,%d,%d]",
                       i, 
@@ -374,6 +385,8 @@ script_call(struct server_pool *pool, const uint8_t *body, int len, const char *
                       array_n(&rs->tagged_servers[2]),
                       array_n(&rs->tagged_servers[3]),
                       array_n(&rs->tagged_servers[4]));
+        } else if (rs == NULL) {
+            log_debug(LOG_VERB, "slot %5d owned by no server", i);
         }
     }
 #endif
