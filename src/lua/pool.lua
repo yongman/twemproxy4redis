@@ -10,15 +10,13 @@ ffi.cdef[[
       void ffi_pool_clear_servers(struct server_pool *pool);
       void ffi_pool_add_server(struct server_pool *pool, struct server *server);
 
-      rstatus_t ffi_server_table_set(struct server_pool *pool, const char *name, struct server *server);
+      void ffi_server_hashkey_set(struct server *server, const char *name, int nlen);
       void ffi_server_table_delete(struct server_pool *pool, const char *name);
-
-      rstatus_t ffi_stats_reset(struct server_pool *pool);
 
       void ffi_slots_clear_replicasets(struct server_pool *pool);
 
-      void ffi_slots_lock(struct server_pool *pool);
-      void ffi_slots_unlock(struct server_pool *pool);
+      void ffi_server_update_done(struct server_pool *pool);
+      void ffi_slots_update_done(struct server_pool *pool);
 ]]
 
 local server = require("server")
@@ -120,7 +118,7 @@ function _M.set_servers(self, configs)
    elseif table.concat(tmp_server_names) ~= table.concat(self.last_server_names) then
       server_changed = true
    end
-   
+
    if server_changed then
       print("server list changed, will update stats and server_table")
       -- Reset stats
@@ -129,13 +127,11 @@ function _M.set_servers(self, configs)
       for _, s in pairs(self.server_map) do
          -- Set server addr->server map
          print("insert server to table", s.addr)
-         if C.ffi_server_table_set(__pool, s.addr, s.raw) < 0 then
-            error("set server table failed")
-         end
+         C.ffi_server_hashkey_set(s.raw, s.addr, #s.addr)
          C.ffi_pool_add_server(__pool, s.raw)
       end
 
-      C.ffi_stats_reset(__pool)
+      C.ffi_server_update_done(__pool)
    end
 
    self.last_server_names = tmp_server_names
@@ -175,15 +171,10 @@ function _M.build_replica_sets(self)
 end
 
 function _M.bind_slots(self)
-   C.ffi_slots_lock(__pool)
-
-   -- clear all slots replica sets
-   C.ffi_slots_clear_replicasets(__pool)
-
    for _,rs in ipairs(self.replica_sets) do
       rs:bind_slots()
    end
-   C.ffi_slots_unlock(__pool)
+   C.ffi_slots_update_done(__pool)
 end
 
 return _M

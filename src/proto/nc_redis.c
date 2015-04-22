@@ -31,7 +31,7 @@
 #define AUTH_REQUIRE_PASSWORD "-NOAUTH Authentication required\r\n"
 #define AUTH_NO_PASSWORD "-ERR Client sent AUTH, but no password is set\r\n"
 
-#define REDIS_UPDATE_TICKS (5000/NC_TICK_INTERVAL) /* 5s */
+#define REDIS_UPDATE_TICKS (1000/NC_TICK_INTERVAL) /* 1s */
 #define REDIS_CLUSTER_NODES_MESSAGE "*3\r\n$7\r\ncluster\r\n$5\r\nnodes\r\n$5\r\nextra\r\n"
 #define REDIS_CLUSTER_ASKING_MESSAGE "*1\r\n$6\r\nASKING\r\n"
 
@@ -2797,17 +2797,13 @@ redis_routing(struct context *ctx, struct server_pool *pool,
         }
         
         if (msg->type > MSG_REQ_REDIS_WRITECMD_START) {
-            pthread_mutex_lock(&pool->slots_mutex);
             server = pool->slots[idx]->master;
-            pthread_mutex_unlock(&pool->slots_mutex);
         } else {
             for (i = 0; i < NC_MAXTAGNUM; i++) {
                 uint32_t n;
                 struct array *slaves;
 
-                pthread_mutex_lock(&pool->slots_mutex);
                 slaves = &pool->slots[idx]->tagged_servers[i];
-                pthread_mutex_unlock(&pool->slots_mutex);
 
                 if (array_n(slaves) == 0) {
                     continue;
@@ -2960,9 +2956,7 @@ redis_pre_rsp_forward(struct context *ctx, struct conn * s_conn, struct msg *msg
             keylen = (uint32_t)(kpos->end - kpos->start);
             idx = pool->key_hash((char*)key, keylen) % REDIS_CLUSTER_SLOTS;
             if (msg->integer != idx) {
-                pthread_mutex_lock(&pool->slots_mutex);
                 pool->slots[idx] = pool->slots[msg->integer];
-                pthread_mutex_unlock(&pool->slots_mutex);
             }
         }
 
@@ -3079,5 +3073,57 @@ redis_pool_tick(struct server_pool *pool)
             msg_put(msg);
             return;
         }
+    }
+
+    if (pool->ffi_server_update) {
+        log_debug(LOG_VERB, "lua update pool info done, apply  now");
+
+        /* update servers */
+        if (array_n(&pool->ffi_server) == 0) {
+            pool->ffi_server_update = 0;
+            return;
+        }
+        log_debug(LOG_VERB, "lua get %d servers", array_n(&pool->ffi_server));
+
+        int n, m;
+        //clear server
+        n = array_n(&pool->server);
+        while (n--) {
+            array_pop(&pool->server);
+        }
+        //pop ffi_server to server
+        n = array_n(&pool->ffi_server);
+        m = n;
+        struct server **s, **se;
+        while (n--) {
+            s = array_pop(&pool->ffi_server);
+            se = array_push(&pool->server);
+            *se = *s;
+            (*s)->idx = m - n - 1;
+
+            /* add server to table */
+            char *hashkey = (*s)->hashkey;
+            log_debug(LOG_VVERB, "add server %s to hashtable", hashkey);
+
+            if (assoc_set(pool->server_table, hashkey, strlen(hashkey), *s) != NC_OK) {
+                log_warn("add server %s to hashtable failed", hashkey);
+            }
+        }
+        log_debug(LOG_VVERB, "lua set %d servers", array_n(&pool->server));
+
+        struct context *ctx = pool->ctx;
+        struct stats *st = ctx->stats;
+        stats_reset(st, &ctx->pool);
+
+        pool->ffi_server_update = 0;
+    }
+
+    if (pool->ffi_slots_update) {
+        /* update slots */
+        memcpy(pool->slots, pool->ffi_slots, REDIS_CLUSTER_SLOTS * sizeof(struct replicaset *));
+
+        slots_debug(pool);
+
+        pool->ffi_slots_update = 0;
     }
 }

@@ -197,15 +197,18 @@ ffi_server_disconnect(struct server *server)
 }
 
 void
-ffi_slots_lock(struct server_pool *pool) {
-    log_debug(LOG_VERB, "lock slots to update");
-    pthread_mutex_lock(&pool->slots_mutex);
+ffi_server_hashkey_set(struct server *server, const char *name, int nlen) {
+    strncpy(server->hashkey, name, nlen);
 }
 
 void
-ffi_slots_unlock(struct server_pool *pool) {
-    log_debug(LOG_VERB, "unlock slots. update done");
-    pthread_mutex_unlock(&pool->slots_mutex);
+ffi_server_update_done(struct server_pool *pool) {
+    pool->ffi_server_update = 1;
+}
+
+void
+ffi_slots_update_done(struct server_pool *pool) {
+    pool->ffi_slots_update = 1;
 }
 
 void
@@ -229,7 +232,7 @@ ffi_slots_set_replicaset(struct server_pool *pool,
     log_debug(LOG_VVERB, "script: update slots %d-%d", left, right);
 
     for (i = left; i <= right; i++) {
-        pool->slots[i] = rs;
+        pool->ffi_slots[i] = rs;
     }
 }
 
@@ -240,9 +243,9 @@ ffi_pool_get_zone(struct server_pool *pool) {
 
 void
 ffi_pool_clear_servers(struct server_pool *pool) {
-    uint32_t n = array_n(&pool->server);
+    uint32_t n = array_n(&pool->ffi_server);
     while (n--) {
-        array_pop(&pool->server);
+        array_pop(&pool->ffi_server);
     }
 }
 
@@ -251,8 +254,8 @@ ffi_pool_add_server(struct server_pool *pool, struct server *server) {
     uint32_t n;
     struct server **s;
 
-    n = array_n(&pool->server);
-    s = array_push(&pool->server);
+    n = array_n(&pool->ffi_server);
+    s = array_push(&pool->ffi_server);
     *s = server;
     server->idx = n;
 
@@ -353,6 +356,33 @@ script_init(struct server_pool *pool, const char *lua_path)
     return NC_OK;
 }
 
+void
+slots_debug(struct server_pool *pool)
+{
+#if 1
+    int i = 0;
+    struct replicaset *last_rs = NULL;
+    for (i = 0; i < REDIS_CLUSTER_SLOTS; i++) {
+        struct replicaset *rs = pool->ffi_slots[i];
+        if (rs && last_rs != rs) {
+            last_rs = rs;
+            log_debug(LOG_VERB, "slot %5d master %.*s tags[%d,%d,%d,%d,%d]",
+                      i, 
+                      (rs->master ? rs->master->pname.len : 3), 
+                      (rs->master ? (char*)rs->master->pname.data : "nil"),
+                      array_n(&rs->tagged_servers[0]),
+                      array_n(&rs->tagged_servers[1]),
+                      array_n(&rs->tagged_servers[2]),
+                      array_n(&rs->tagged_servers[3]),
+                      array_n(&rs->tagged_servers[4]));
+        } else if (rs == NULL && last_rs != rs) {
+            last_rs = rs;
+            log_debug(LOG_VERB, "slot %5d owned by no server", i);
+        }
+    }
+#endif
+}
+
 rstatus_t
 script_call(struct server_pool *pool, const uint8_t *body, int len, const char *func_name)
 {
@@ -369,27 +399,6 @@ script_call(struct server_pool *pool, const uint8_t *body, int len, const char *
         return NC_ERROR;
     }
 
-#if 1
-    int i = 0;
-    struct replicaset *last_rs = NULL;
-    for (i = 0; i < REDIS_CLUSTER_SLOTS; i++) {
-        struct replicaset *rs = pool->slots[i];
-        if (rs && last_rs != rs) {
-            last_rs = rs;
-            log_debug(LOG_VERB, "slot %5d master %.*s tags[%d,%d,%d,%d,%d]",
-                      i, 
-                      (rs->master ? rs->master->pname.len : 3), 
-                      (rs->master ? (char*)rs->master->pname.data : "nil"),
-                      array_n(&rs->tagged_servers[0]),
-                      array_n(&rs->tagged_servers[1]),
-                      array_n(&rs->tagged_servers[2]),
-                      array_n(&rs->tagged_servers[3]),
-                      array_n(&rs->tagged_servers[4]));
-        } else if (rs == NULL) {
-            log_debug(LOG_VERB, "slot %5d owned by no server", i);
-        }
-    }
-#endif
 
     return NC_OK;
 }

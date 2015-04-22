@@ -70,6 +70,7 @@ struct continuum {
     uint32_t value;  /* hash value */
 };
 
+#define MAX_ADDR_PORT_LEN 30
 struct server {
     uint32_t           idx;           /* server index */
     struct server_pool *owner;        /* owner pool */
@@ -88,6 +89,7 @@ struct server {
 
     int64_t            next_retry;    /* next retry time in usec */
     uint32_t           failure_count; /* # consecutive failures */
+    char               hashkey[MAX_ADDR_PORT_LEN];
 };
 
 #define NC_MAXTAGNUM 10
@@ -143,11 +145,17 @@ struct server_pool {
     struct string      zone;                 /* avaliablity zone */
     struct hash_table  *server_table;        /* address(ip:port) to server map */
     struct replicaset  *slots[REDIS_CLUSTER_SLOTS];
-    pthread_mutex_t    slots_mutex;          /* mutex to access the slot */
     pthread_t          script_thread;
     int                notify_fd[2];         /* pipe fd to notify thread */
     struct mbuf        *mbuf_thread;         /* set the value before call the script thread */
     lua_State *L;
+
+    /* added for lua script thread */
+    unsigned           ffi_server_update:1;
+    unsigned           ffi_slots_update:1;
+    struct array       ffi_server;
+    struct hash_table  *ffi_server_table;
+    struct replicaset  *ffi_slots[REDIS_CLUSTER_SLOTS];
 };
 
 void server_ref(struct conn *conn, void *owner);

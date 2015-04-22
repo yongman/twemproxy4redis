@@ -135,6 +135,11 @@ server_init(struct array *server, struct array *conf_server,
         return status;
     }
 
+    status = array_init(&sp->ffi_server, nserver, sizeof(struct server*));
+    if (status != NC_OK) {
+        return status;
+    }
+
     /* transform conf server to server */
     status = array_each(conf_server, conf_server_each_transform, server);
     if (status != NC_OK) {
@@ -872,16 +877,12 @@ void *server_script_thread(void *elem) {
     }
 }
 
-/* init create the thread to run script and init a mutex*/
+/* init create the thread to run script */
 static rstatus_t
 server_pool_each_script_thread(void *elem, void *data)
 {
     struct server_pool *sp = elem;
 
-    if (pthread_mutex_init(&sp->slots_mutex, NULL) != 0) {
-        log_debug(LOG_WARN, "pthread_mutex_init failed");
-        return NC_ERROR;
-    }
     /* create a pipe to notify */
     if (pipe(sp->notify_fd) != 0) {
         log_debug(LOG_WARN, "pipe failed");
@@ -894,6 +895,9 @@ server_pool_each_script_thread(void *elem, void *data)
         return NC_ERROR;
     }
 
+    sp->ffi_server_update = 0;
+    sp->ffi_slots_update = 0;
+
     return NC_OK;
 }
 
@@ -904,6 +908,12 @@ server_pool_each_set_table(void *elem, void *data)
 
     sp->server_table = assoc_create_table(sp->key_hash, array_n(&sp->server));
     if (sp->server_table == NULL) {
+        log_debug(LOG_WARN, "create server table failed");
+        return NC_ERROR;
+    }
+
+    sp->ffi_server_table = assoc_create_table(sp->key_hash, array_n(&sp->server));
+    if (sp->ffi_server_table == NULL) {
         log_debug(LOG_WARN, "create server table failed");
         return NC_ERROR;
     }
@@ -948,7 +958,7 @@ server_pool_init(struct array *server_pool, struct array *conf_pool,
         return status;
     }
 
-    /* init slots mutex */
+    /* init pthread */
     status = array_each(server_pool, server_pool_each_script_thread, ctx);
     if (status != NC_OK) {
         return status;
