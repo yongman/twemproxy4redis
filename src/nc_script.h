@@ -27,7 +27,6 @@ void ffi_replicaset_delete(struct replicaset *rs);
 void ffi_replicaset_set_master(struct replicaset *rs, struct server *server);
 void ffi_replicaset_add_tagged_server(struct replicaset *rs, int tag_idx, struct server *server);
 
-void ffi_slots_clear_replicasets(struct server_pool *pool);
 void ffi_slots_set_replicaset(struct server_pool *pool, struct replicaset *rs, int left, int right);
 
 void ffi_stats_reset(struct server_pool *pool);

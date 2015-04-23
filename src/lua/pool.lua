@@ -61,13 +61,14 @@ function _M.fetch_replica_set(self)
       rs = replica_set:new(self.pool)
    else
       rs = table.remove(self._rs_pool, 1)
+      --pop old tagged servers
+      rs:deinit()
    end
- 
+
    return rs
 end
 
 function _M.put_replica_set(self, rs)
-   rs:deinit()
    table.insert(self._rs_pool, rs)
 end
 

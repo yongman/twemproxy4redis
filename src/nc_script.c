@@ -212,17 +212,6 @@ ffi_slots_update_done(struct server_pool *pool) {
 }
 
 void
-ffi_slots_clear_replicasets(struct server_pool *pool)
-{
-    int i;
-
-    log_debug(LOG_VVERB, "script: clear all slots");
-
-    memset(pool->slots, NULL,
-           REDIS_CLUSTER_SLOTS * sizeof(struct replicaset  *));
-}
-
-void
 ffi_slots_set_replicaset(struct server_pool *pool,
                          struct replicaset *rs,
                          int left, int right)

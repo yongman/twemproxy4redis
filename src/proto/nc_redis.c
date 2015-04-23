@@ -3091,6 +3091,7 @@ redis_pool_tick(struct server_pool *pool)
         while (n--) {
             array_pop(&pool->server);
         }
+
         //pop ffi_server to server
         n = array_n(&pool->ffi_server);
         m = n;
