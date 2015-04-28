@@ -3005,8 +3005,6 @@ connect_to_server(struct server *server) {
 
     status = server_connect(pool->ctx, server, conn);
     if (status != NC_OK) {
-        log_warn("script: connect to server '%.*s' failed, ignored: %s",
-                 server->pname.len, server->pname.data, strerror(errno));
         server_close(pool->ctx, conn);
         return NC_ERROR;
     }
@@ -3032,7 +3030,8 @@ redis_pool_tick(struct server_pool *pool)
 
         pool->need_update_slots = 0;
 
-        msg = msg_get(NULL, true, 1);
+        log_debug(LOG_VERB, "do msg get in pool_tick");
+        msg = msg_get(NULL, true, true);
         if (msg == NULL) {
             return;
         }
@@ -3044,7 +3043,7 @@ redis_pool_tick(struct server_pool *pool)
             msg_put(msg);
             return;
         }
-        
+
         idx = random() % 16384;
         if (pool->slots[idx] == NULL) {
             int s_cnt = array_n(&pool->server);
@@ -3126,8 +3125,9 @@ redis_pool_tick(struct server_pool *pool)
             s = array_pop(&pool->ffi_server);
 
             /*connect to server */
-            status = ffi_server_connect(*s);
+            status = connect_to_server(*s);
             if (status != NC_OK) {
+
                 continue;
             }
 
