@@ -2974,7 +2974,6 @@ ferror:
 
     /* probe msg */
     if (c_conn == NULL) {
-        int64_t t_start, t_end;
         struct mbuf *mbuf;
 
         /* FIXME: check length */
@@ -2989,6 +2988,28 @@ ferror:
         return NC_ERROR;
     }
 
+    return NC_OK;
+}
+
+static rstatus_t
+connect_to_server(struct server *server) {
+    struct server_pool *pool;
+    struct conn *conn;
+    rstatus_t status;
+
+    pool = server->owner;
+    conn = server_conn(server);
+    if (conn == NULL) {
+        return NC_ERROR;
+    }
+
+    status = server_connect(pool->ctx, server, conn);
+    if (status != NC_OK) {
+        log_warn("script: connect to server '%.*s' failed, ignored: %s",
+                 server->pname.len, server->pname.data, strerror(errno));
+        server_close(pool->ctx, conn);
+        return NC_ERROR;
+    }
     return NC_OK;
 }
 
@@ -3029,7 +3050,9 @@ redis_pool_tick(struct server_pool *pool)
             int s_cnt = array_n(&pool->server);
             int s_idx = s_cnt == 0 ? 0 : random() % array_n(&pool->server);
             server = *(struct server**)array_get(&pool->server, s_idx);
-            log_debug(LOG_VERB, "slot[%d] is nil, request server :%d", idx, server->port);
+            if (server) {
+                log_debug(LOG_VERB, "slot[%d] is nil, request server :%d", idx, server->port);
+            }
         } else {
             for (i = 0; i < NC_MAXTAGNUM; i++) {
                 uint32_t n;
@@ -3043,7 +3066,9 @@ redis_pool_tick(struct server_pool *pool)
                 server = *(struct server**)array_get(slaves, n);
                 break;
             }
-            log_debug(LOG_VERB, "slot[%d] is not nil, request server :%d", idx, server->port);
+            if (server) {
+                log_debug(LOG_VERB, "slot[%d] is not nil, request server :%d", idx, server->port);
+            }
         }
 
         if (server == NULL) {
@@ -3086,6 +3111,7 @@ redis_pool_tick(struct server_pool *pool)
         log_debug(LOG_VERB, "lua get %d servers", array_n(&pool->ffi_server));
 
         int n, m;
+        rstatus_t status;
         //clear server
         n = array_n(&pool->server);
         while (n--) {
@@ -3098,6 +3124,13 @@ redis_pool_tick(struct server_pool *pool)
         struct server **s, **se;
         while (n--) {
             s = array_pop(&pool->ffi_server);
+
+            /*connect to server */
+            status = ffi_server_connect(*s);
+            if (status != NC_OK) {
+                continue;
+            }
+
             se = array_push(&pool->server);
             *se = *s;
             (*s)->idx = m - n - 1;

@@ -862,7 +862,7 @@ static
 void *server_script_thread(void *elem) {
     struct server_pool *sp = elem;
     int64_t t_start, t_end;
-    sleep(2);
+    sleep(1);
     for(;;) {
         char buf[1];
         if (1 != read(sp->notify_fd[0], buf, sizeof(buf))) {

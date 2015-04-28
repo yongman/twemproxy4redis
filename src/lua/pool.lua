@@ -51,6 +51,7 @@ end
 
 function _M.put_server(self, s)
    s:disconnect()
+   print("pool.lua:disconnect in put_server")
    table.insert(self._se_pool, s)
 end
 
@@ -109,8 +110,7 @@ function _M.set_servers(self, configs)
 
    for _, s in pairs(self.server_map) do
       table.insert(tmp_server_names, s.addr)
-      -- Add a chance to reconnection
-      s:connect()
+      -- do server connect operation in main thread
    end
 
    table.sort(tmp_server_names)
