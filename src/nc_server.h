@@ -154,7 +154,6 @@ struct server_pool {
     unsigned           ffi_server_update:1;
     unsigned           ffi_slots_update:1;
     struct array       ffi_server;
-    struct hash_table  *ffi_server_table;
     struct replicaset  *ffi_slots[REDIS_CLUSTER_SLOTS];
 };
 

@@ -2914,6 +2914,14 @@ redis_pre_rsp_forward(struct context *ctx, struct conn * s_conn, struct msg *msg
         s_conn = server_conn(server);
         if (s_conn == NULL) goto ferror;
 
+        status = server_connect(pool->ctx, server, s_conn);
+        if (status != NC_OK) {
+            log_warn("redis: connect to server '%.*s' failed, ignored: %s",
+                     server->pname.len, server->pname.data, strerror(errno));
+            server_close(pool->ctx, s_conn);
+            goto ferror;
+        }
+
         /* need send ASKING firstly? */
         if (msg->type == MSG_RSP_REDIS_ASK) {
             struct msg *ask_msg;
@@ -3044,7 +3052,8 @@ redis_pool_tick(struct server_pool *pool)
             return;
         }
 
-        idx = random() % 16384;
+        idx = random() % REDIS_CLUSTER_SLOTS;
+        server = NULL;
         if (pool->slots[idx] == NULL) {
             int s_cnt = array_n(&pool->server);
             int s_idx = s_cnt == 0 ? 0 : random() % array_n(&pool->server);
@@ -3124,10 +3133,9 @@ redis_pool_tick(struct server_pool *pool)
         while (n--) {
             s = array_pop(&pool->ffi_server);
 
-            /*connect to server */
+            /*connect to server, if need */
             status = connect_to_server(*s);
             if (status != NC_OK) {
-
                 continue;
             }
 

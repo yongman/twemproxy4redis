@@ -50,8 +50,6 @@ function _M.fetch_server(self, config)
 end
 
 function _M.put_server(self, s)
-   s:disconnect()
-   print("pool.lua:disconnect in put_server")
    table.insert(self._se_pool, s)
 end
 

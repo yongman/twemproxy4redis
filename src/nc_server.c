@@ -862,7 +862,6 @@ static
 void *server_script_thread(void *elem) {
     struct server_pool *sp = elem;
     int64_t t_start, t_end;
-    sleep(1);
     for(;;) {
         char buf[1];
         if (1 != read(sp->notify_fd[0], buf, sizeof(buf))) {
@@ -912,12 +911,6 @@ server_pool_each_set_table(void *elem, void *data)
         return NC_ERROR;
     }
 
-    sp->ffi_server_table = assoc_create_table(sp->key_hash, array_n(&sp->server));
-    if (sp->ffi_server_table == NULL) {
-        log_debug(LOG_WARN, "create server table failed");
-        return NC_ERROR;
-    }
-
     return NC_OK;
 }
 
@@ -958,12 +951,6 @@ server_pool_init(struct array *server_pool, struct array *conf_pool,
         return status;
     }
 
-    /* init pthread */
-    status = array_each(server_pool, server_pool_each_script_thread, ctx);
-    if (status != NC_OK) {
-        return status;
-    }
-
     /* set tick callback */
     status = array_each(server_pool, server_pool_each_set_tick_callback, ctx);
     if (status != NC_OK) {
@@ -983,6 +970,12 @@ server_pool_init(struct array *server_pool, struct array *conf_pool,
     status = array_each(server_pool, server_pool_each_run, NULL);
     if (status != NC_OK) {
         server_pool_deinit(server_pool);
+        return status;
+    }
+
+    /* init pthread */
+    status = array_each(server_pool, server_pool_each_script_thread, ctx);
+    if (status != NC_OK) {
         return status;
     }
 
