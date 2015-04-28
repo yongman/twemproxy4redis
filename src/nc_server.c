@@ -377,13 +377,14 @@ server_close(struct context *ctx, struct conn *conn)
             req_put(msg);
         } else {
             c_conn = msg->owner;
-            if (c_conn == NULL) continue;
-
-            ASSERT(c_conn->client && !c_conn->proxy);
 
             msg->done = 1;
             msg->error = 1;
             msg->err = conn->err;
+
+            if (c_conn == NULL) continue;
+
+            ASSERT(c_conn->client && !c_conn->proxy);
 
             if (msg->frag_owner != NULL) {
                 msg->frag_owner->nfrag_done++;
@@ -862,7 +863,6 @@ static
 void *server_script_thread(void *elem) {
     struct server_pool *sp = elem;
     int64_t t_start, t_end;
-    sleep(2);
     for(;;) {
         char buf[1];
         if (1 != read(sp->notify_fd[0], buf, sizeof(buf))) {
@@ -872,8 +872,9 @@ void *server_script_thread(void *elem) {
         t_start = nc_usec_now();
         script_call(sp, sp->mbuf_thread->start, sp->mbuf_thread->last - sp->mbuf_thread->start, 
                     "update_cluster_nodes");
+        mbuf_put(sp->mbuf_thread);
         t_end = nc_usec_now();
-        log_debug(LOG_VERB, "update slots done in %lldus",t_end - t_start);
+        log_debug(LOG_VERB, "parse msg done in %lldus",t_end - t_start);
     }
 }
 
@@ -885,13 +886,13 @@ server_pool_each_script_thread(void *elem, void *data)
 
     /* create a pipe to notify */
     if (pipe(sp->notify_fd) != 0) {
-        log_debug(LOG_WARN, "pipe failed");
+        log_warn("pipe failed");
         return NC_ERROR;
     }
 
     /* start the thread*/
     if (pthread_create(&sp->script_thread, NULL, server_script_thread, (void *)sp)) {
-        log_debug(LOG_WARN, "pthread create failed");
+        log_warn("pthread create failed");
         return NC_ERROR;
     }
 
@@ -908,13 +909,7 @@ server_pool_each_set_table(void *elem, void *data)
 
     sp->server_table = assoc_create_table(sp->key_hash, array_n(&sp->server));
     if (sp->server_table == NULL) {
-        log_debug(LOG_WARN, "create server table failed");
-        return NC_ERROR;
-    }
-
-    sp->ffi_server_table = assoc_create_table(sp->key_hash, array_n(&sp->server));
-    if (sp->ffi_server_table == NULL) {
-        log_debug(LOG_WARN, "create server table failed");
+        log_warn("create server table failed");
         return NC_ERROR;
     }
 
@@ -958,12 +953,6 @@ server_pool_init(struct array *server_pool, struct array *conf_pool,
         return status;
     }
 
-    /* init pthread */
-    status = array_each(server_pool, server_pool_each_script_thread, ctx);
-    if (status != NC_OK) {
-        return status;
-    }
-
     /* set tick callback */
     status = array_each(server_pool, server_pool_each_set_tick_callback, ctx);
     if (status != NC_OK) {
@@ -983,6 +972,12 @@ server_pool_init(struct array *server_pool, struct array *conf_pool,
     status = array_each(server_pool, server_pool_each_run, NULL);
     if (status != NC_OK) {
         server_pool_deinit(server_pool);
+        return status;
+    }
+
+    /* init pthread */
+    status = array_each(server_pool, server_pool_each_script_thread, ctx);
+    if (status != NC_OK) {
         return status;
     }
 
@@ -1040,4 +1035,14 @@ server_pool_tick(struct context *ctx)
     pools = &ctx->pool;
 
     array_each(pools, server_pool_each_tick, NULL);
+}
+
+void
+server_conn_close(struct context *ctx, struct server *server)
+{
+    struct conn *conn;
+    while(!TAILQ_EMPTY(&server->s_conn_q)) {
+        conn = TAILQ_FIRST(&server->s_conn_q);
+        server_close(ctx, conn);
+    }
 }

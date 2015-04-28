@@ -154,7 +154,6 @@ struct server_pool {
     unsigned           ffi_server_update:1;
     unsigned           ffi_slots_update:1;
     struct array       ffi_server;
-    struct hash_table  *ffi_server_table;
     struct replicaset  *ffi_slots[REDIS_CLUSTER_SLOTS];
 };
 
@@ -179,5 +178,6 @@ rstatus_t server_pool_init(struct array *server_pool, struct array *conf_pool, s
 void server_pool_deinit(struct array *server_pool);
 uint32_t server_pool_hash(struct server_pool *pool, uint8_t *key, uint32_t keylen);
 void server_pool_tick(struct context *ctx);
+void server_conn_close(struct context *ctx, struct server *server);
 
 #endif

@@ -8,12 +8,24 @@ function parse(lines)
    local configs = {}
    local idx = 1
    local node_lines = {}
-   -- skip summary
+   -- skip summary and ip empty line
    for i,line in ipairs(lines) do
       if string.sub(line,1,2) ~= "# " then
-         table.insert(node_lines,line)
+         local xs = line:split(" ")
+         local addr = xs[4]:split(":")
+         if string.len(addr[1]) ~= 0 then
+            table.insert(node_lines,line)
+         end
       end
+
+
    end
+
+   if #node_lines < 3 then
+       error("not enough nodes")
+       return
+   end
+
    -- parse nodes
    for _,line in ipairs(node_lines) do
       local xs = line:split(" ")
@@ -107,7 +119,7 @@ function update_cluster_nodes(msg)
       error("free node found")
       return
    end
-   
+
    -- reconstruct servers, fix adds and drops
    pool:set_servers(configs)
 

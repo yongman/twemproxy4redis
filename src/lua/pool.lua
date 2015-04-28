@@ -10,7 +10,6 @@ ffi.cdef[[
       void ffi_pool_clear_servers(struct server_pool *pool);
       void ffi_pool_add_server(struct server_pool *pool, struct server *server);
 
-      void ffi_server_hashkey_set(struct server *server, const char *name, int nlen);
       void ffi_server_table_delete(struct server_pool *pool, const char *name);
 
       void ffi_slots_clear_replicasets(struct server_pool *pool);
@@ -50,7 +49,6 @@ function _M.fetch_server(self, config)
 end
 
 function _M.put_server(self, s)
-   s:disconnect()
    table.insert(self._se_pool, s)
 end
 
@@ -109,8 +107,7 @@ function _M.set_servers(self, configs)
 
    for _, s in pairs(self.server_map) do
       table.insert(tmp_server_names, s.addr)
-      -- Add a chance to reconnection
-      s:connect()
+      -- do server connect operation in main thread
    end
 
    table.sort(tmp_server_names)
@@ -126,9 +123,6 @@ function _M.set_servers(self, configs)
       C.ffi_pool_clear_servers(__pool)
 
       for _, s in pairs(self.server_map) do
-         -- Set server addr->server map
-         print("insert server to table", s.addr)
-         C.ffi_server_hashkey_set(s.raw, s.addr, #s.addr)
          C.ffi_pool_add_server(__pool, s.raw)
       end
 

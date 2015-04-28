@@ -51,6 +51,9 @@ static struct stats_desc stats_server_desc[] = {
 };
 #undef DEFINE_ACTION
 
+static
+rstatus_t stats_pool_copy_recover(struct context *ctx, struct stats_pool *stp_src, struct hash_table **sit);
+
 void
 stats_describe(void)
 {
@@ -794,7 +797,9 @@ stats_loop_callback(void *arg1, void *arg2)
     int n = *((int *)arg2);
 
     /* aggregate stats from shadow (b) -> sum (c) */
+    pthread_mutex_lock(&st->stats_mutex);
     stats_aggregate(st);
+    pthread_mutex_unlock(&st->stats_mutex);
 
     if (n == 0) {
         return;
@@ -872,6 +877,7 @@ stats_start_aggregator(struct stats *st)
         log_error("stats aggregator create failed: %s", strerror(status));
         return NC_ERROR;
     }
+    pthread_mutex_init(&st->stats_mutex, NULL);
 
     return NC_OK;
 }
@@ -968,9 +974,13 @@ error:
 }
 
 rstatus_t
-stats_reset(struct stats *st, struct array *server_pool)
+stats_reset_and_recover(struct context *ctx, struct stats_pool *stp_src, struct hash_table **sit)
 {
     rstatus_t status;
+    struct stats *st;
+    struct array *server_pool;
+    st = ctx->stats;
+    server_pool = &ctx->pool;
 
     stats_stop_aggregator(st);
     stats_pool_unmap(&st->sum);
@@ -999,6 +1009,11 @@ stats_reset(struct stats *st, struct array *server_pool)
     }
 
     status = stats_create_buf(st);
+    if (status != NC_OK) {
+        return NC_ERROR;
+    }
+
+    status = stats_pool_copy_recover(ctx, stp_src, sit);
     if (status != NC_OK) {
         return NC_ERROR;
     }
@@ -1054,6 +1069,22 @@ stats_swap(struct stats *st)
     st->updated = 0;
 
     st->aggregate = 1;
+}
+
+void
+stats_aggregate_force(struct stats *st)
+{
+    pthread_mutex_lock(&st->stats_mutex);
+    st->aggregate = 1;
+    stats_aggregate(st);
+
+    st->updated = 1;
+    stats_swap(st);
+    stats_aggregate(st);
+
+    stats_pool_reset(&st->shadow);
+    stats_pool_reset(&st->current);
+    pthread_mutex_unlock(&st->stats_mutex);
 }
 
 static struct stats_metric *
@@ -1253,4 +1284,181 @@ _stats_server_set_ts(struct context *ctx, struct server *server,
 
     log_debug(LOG_VVVERB, "set ts field '%.*s' to %"PRId64"", stm->name.len,
               stm->name.data, stm->value.timestamp);
+}
+
+static void
+stats_metric_copy(struct stats_metric *dst, struct stats_metric *src)
+{
+    dst->value.counter = src->value.counter;
+}
+
+rstatus_t
+stats_pool_copy_init(struct stats_pool *stp, struct server_pool *sp, struct hash_table **sit)
+{
+    rstatus_t status;
+    uint32_t nserver;
+    uint32_t i;
+
+    string_init(&stp->name);
+    string_duplicate(&stp->name, &sp->name);
+    array_null(&stp->metric);
+    array_null(&stp->server);
+
+    status = array_init(&stp->metric, STATS_POOL_NFIELD, sizeof(struct stats_metric));
+    if (status != NC_OK) {
+        return status;
+    }
+
+    nserver = array_n(&sp->server) == 0 ? array_n(&stp->server):array_n(&sp->server);
+    status = array_init(&stp->server, nserver, sizeof(struct stats_server));
+    if (status != NC_OK) {
+        return status;
+    }
+
+    (*sit) = assoc_create_table(sp->key_hash, array_n(&sp->server));
+    if ((*sit) == NULL)
+    {
+        return NC_ERROR;
+    }
+    return NC_OK;
+}
+
+void
+stats_pool_copy_deinit(struct stats_pool *stp, struct hash_table **sit)
+{
+    uint32_t nserver;
+    uint32_t i;
+    struct stats_server *sts;
+
+    stats_metric_deinit(&stp->metric);
+    string_deinit(&stp->name);
+
+    nserver = array_n(&stp->server);
+    for (i = 0;i < nserver;i++) {
+        sts = array_pop(&stp->server);
+        string_deinit(&stp->name);
+
+        stats_metric_deinit(&sts->metric);
+    }
+    array_deinit(&stp->server);
+
+    assoc_destroy_table(*sit);
+    (*sit) = NULL;
+}
+
+/* copy ctx->sum->pool[i] to stp */
+rstatus_t
+stats_pool_copy(struct context *ctx, struct stats_pool *stp, struct hash_table **sit)
+{
+    rstatus_t status;
+    uint32_t i, j, k;
+    struct stats *st =  ctx->stats;
+    struct array *sum = &st->sum;
+
+    struct stats_pool *istp;
+    struct stats_metric *stm_src, *stm_dst;
+    struct stats_server *sts_src, *sts_dst;
+    for (i = 0;i < array_n(sum); i++) {
+        /* get pool from array sum */
+        istp = array_get(sum, i);
+        /* find the pool */
+        if (string_compare(&stp->name, &istp->name) == 0) {
+            /* copy the metric array */
+            for (j = 0;j < array_n(&istp->metric);j++) {
+                stm_src = array_get(&istp->metric, j);
+                stm_dst = array_push(&stp->metric);
+
+                stats_metric_copy(stm_dst, stm_src);
+            }
+            /* copy the server array */
+            for (j = 0;j < array_n(&istp->server);j++) {
+                sts_src = array_get(&istp->server, j);
+
+                /* add server idx to hashtable */
+                status = assoc_set(*sit, sts_src->name.data, strlen(sts_src->name.data),
+                                   (void *)(j+1)); // TODO trick here. avoid assert
+                if (status != NC_OK) {
+                    return status;
+                }
+
+                sts_dst = array_push(&stp->server);
+
+                /*init dst server metric */
+                status = array_init(&sts_dst->metric, STATS_SERVER_NFIELD,
+                                    sizeof(struct stats_metric));
+                if (status != NC_OK) {
+                    return status;
+                }
+                string_init(&sts_dst->name);
+                string_duplicate(&sts_dst->name, &sts_src->name);
+                log_debug(LOG_VVVERB, "sts_dst->name is %s", (sts_dst->name).data);
+
+                /* copy the metric array in one server */
+                log_debug(LOG_VVVERB, "array_n server->metric is %d", array_n(&sts_src->metric));
+                for (k = 0;k < array_n(&sts_src->metric); k++) {
+                    log_debug(LOG_VVVERB,"server->metric %d", k);
+                    stm_src = array_get(&sts_src->metric, k);
+                    stm_dst = array_push(&sts_dst->metric);
+
+                    stats_metric_copy(stm_dst, stm_src);
+                }
+            }
+        }
+    }
+    return NC_OK;
+}
+
+static rstatus_t
+stats_pool_copy_recover(struct context *ctx, struct stats_pool *stp_src, struct hash_table **sit)
+{
+    rstatus_t status;
+    uint32_t i, j, k;
+    struct stats *st =  ctx->stats;
+    struct array *sum = &st->sum;
+
+    struct stats_pool *stp_dst;
+    struct stats_metric *stm_src, *stm_dst;
+    struct stats_server *sts_src, *sts_dst;
+    char *key;
+    uint32_t sidx;
+    for (i = 0;i < array_n(sum); i++) {
+        /* get pool from array sum */
+        stp_dst = array_get(sum, i);
+        /* find the pool */
+        if (string_compare(&stp_src->name, &stp_dst->name) == 0) {
+            /* recover the metric array */
+            for (j = 0;j < array_n(&stp_dst->metric);j++) {
+                stm_src = array_get(&stp_dst->metric, j);
+                stm_dst = array_get(&stp_src->metric, j);
+
+                stats_metric_copy(stm_dst, stm_src);
+            }
+            /* recover the server array */
+            for (j = 0;j < array_n(&stp_dst->server);j++) {
+                /* recover sts_src data to sts_dst */
+                sts_dst = array_get(&stp_dst->server, j);
+                log_debug(LOG_VVVERB, "try recover server %s", sts_dst->name.data);
+
+                /* find the server in index hashtable */
+                key = sts_dst->name.data;
+                sidx = (uint32_t)assoc_find(*sit, key, strlen(key));
+                if (sidx != NULL) {
+                    sidx = sidx - 1;
+                    /* get server data in array */
+                    sts_src = array_get(&stp_src->server, sidx);
+
+                    ASSERT(string_compare(&sts_dst->name, &sts_src->name) == 0);
+
+                    log_debug(LOG_VERB, "recovering server stats %s", sts_dst->name.data);
+                    /* recover the old data */
+                    for (k = 0;k < array_n(&sts_src->metric) - 4; k++) {
+                        stm_src = array_get(&sts_src->metric, k);
+                        stm_dst = array_get(&sts_dst->metric, k);
+                        stats_metric_copy(stm_dst, stm_src);
+                    }
+                }
+            }
+        }
+    }
+    return NC_OK;
 }

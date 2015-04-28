@@ -8,7 +8,6 @@ rstatus_t script_call(struct server_pool *pool, const uint8_t *body, int len, co
 
 /* avoid compiler noise */
 
-rstatus_t ffi_server_table_set(struct server_pool *pool, const char *name, struct server *server);
 void ffi_server_table_delete(struct server_pool *pool, const char *name);
 
 struct server* ffi_server_new(struct server_pool *pool, char *name, char *id, char *ip, int port);
