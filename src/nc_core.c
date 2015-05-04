@@ -312,10 +312,7 @@ core_timeout(struct context *ctx)
         msg_tmo_delete(msg);
         conn->err = ETIMEDOUT;
 
-        /* the message is create by pool_tick, do not need close */
-        if (msg->owner) {
-            core_close(ctx, conn);
-        }
+        core_close(ctx, conn);
     }
 }
 
