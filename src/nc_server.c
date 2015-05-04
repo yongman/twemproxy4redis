@@ -872,7 +872,7 @@ void *server_script_thread(void *elem) {
         script_call(sp, sp->mbuf_thread->start, sp->mbuf_thread->last - sp->mbuf_thread->start, 
                     "update_cluster_nodes");
         t_end = nc_usec_now();
-        log_debug(LOG_VERB, "update slots done in %lldus",t_end - t_start);
+        log_debug(LOG_VERB, "parse msg done in %lldus",t_end - t_start);
     }
 }
 
@@ -884,13 +884,13 @@ server_pool_each_script_thread(void *elem, void *data)
 
     /* create a pipe to notify */
     if (pipe(sp->notify_fd) != 0) {
-        log_debug(LOG_WARN, "pipe failed");
+        log_warn("pipe failed");
         return NC_ERROR;
     }
 
     /* start the thread*/
     if (pthread_create(&sp->script_thread, NULL, server_script_thread, (void *)sp)) {
-        log_debug(LOG_WARN, "pthread create failed");
+        log_warn("pthread create failed");
         return NC_ERROR;
     }
 
@@ -907,7 +907,7 @@ server_pool_each_set_table(void *elem, void *data)
 
     sp->server_table = assoc_create_table(sp->key_hash, array_n(&sp->server));
     if (sp->server_table == NULL) {
-        log_debug(LOG_WARN, "create server table failed");
+        log_warn("create server table failed");
         return NC_ERROR;
     }
 

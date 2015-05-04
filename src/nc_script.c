@@ -183,7 +183,7 @@ ffi_server_disconnect(struct server *server)
     struct server_pool *pool;
 
     pool = server->owner;
-    
+
     while (!TAILQ_EMPTY(&server->s_conn_q)) {
         struct conn *conn;
 
@@ -194,11 +194,6 @@ ffi_server_disconnect(struct server *server)
     }
 
     return NC_OK;
-}
-
-void
-ffi_server_hashkey_set(struct server *server, const char *name, int nlen) {
-    strncpy(server->hashkey, name, nlen);
 }
 
 void
@@ -240,15 +235,12 @@ ffi_pool_clear_servers(struct server_pool *pool) {
 
 void
 ffi_pool_add_server(struct server_pool *pool, struct server *server) {
-    uint32_t n;
     struct server **s;
 
-    n = array_n(&pool->ffi_server);
     s = array_push(&pool->ffi_server);
     *s = server;
-    server->idx = n;
 
-    log_debug(LOG_NOTICE, "add server idx %d port %d", server->idx, server->port);
+    log_debug(LOG_NOTICE, "prepare to add server %s", server->name.data);
 }
 
 rstatus_t
@@ -261,14 +253,6 @@ void
 ffi_server_table_delete(struct server_pool *pool, const char *name)
 {
     return assoc_delete(pool->server_table, name, strlen(name));
-}
-
-void
-ffi_stats_reset(struct server_pool *pool) {
-    struct context *ctx = pool->ctx;
-    struct stats *st = ctx->stats;
-
-    stats_reset(st, &ctx->pool);
 }
 
 static int
@@ -285,7 +269,7 @@ set_lua_path(lua_State* L, const char* path)
     /* grab path string from top of stack */
     str = lua_tostring(L, -1);
 
-    log_debug(LOG_VERB, "get lua package.path %s", str);
+    log_debug(LOG_VVVERB, "get lua package.path %s", str);
 
     strcat(lua_path, str);
     strcat(lua_path, ";");
@@ -298,7 +282,7 @@ set_lua_path(lua_State* L, const char* path)
     /* push the new one */
     lua_pushstring(L, lua_path);
 
-    log_debug(LOG_VERB, "set lua package.path %s", lua_path);
+    log_debug(LOG_VVVERB, "set lua package.path %s", lua_path);
 
     /* set the field "path" in table at -2 with value at top of stack */
     lua_setfield(L, -2, "path");

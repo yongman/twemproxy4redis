@@ -3109,6 +3109,10 @@ redis_pool_tick(struct server_pool *pool)
     }
 
     if (pool->ffi_server_update) {
+        pool->ffi_server_update = 0;
+        struct context *ctx = pool->ctx;
+        struct stats *st = ctx->stats;
+
         log_debug(LOG_VERB, "lua update pool info done, apply  now");
 
         /* update servers */
@@ -3116,48 +3120,68 @@ redis_pool_tick(struct server_pool *pool)
             pool->ffi_server_update = 0;
             return;
         }
-        log_debug(LOG_VERB, "lua get %d servers", array_n(&pool->ffi_server));
+        log_debug(LOG_VVVERB, "lua get %d servers", array_n(&pool->ffi_server));
 
-        int n, m;
+
+        stats_aggregate_force(st);
+
+        uint32_t i, n, m;
+        struct server **s, **se;
         rstatus_t status;
-        //clear server
+
         n = array_n(&pool->server);
+
+        struct stats_pool stats_pool;
+        struct hash_table *server_idx_table;
+
+        status = stats_pool_copy_init(&stats_pool, pool, &server_idx_table);
+        if (status != NC_OK) {
+            log_warn("stats_pool_copy_init failed");
+        }
+
+        status = stats_pool_copy(ctx, &stats_pool, &server_idx_table);
+        if (status != NC_OK) {
+            log_warn("stats_pool_copy failed");
+        }
+
         while (n--) {
             array_pop(&pool->server);
         }
 
         //pop ffi_server to server
         n = array_n(&pool->ffi_server);
-        m = n;
-        struct server **s, **se;
         while (n--) {
             s = array_pop(&pool->ffi_server);
+
+            m = array_n(&pool->server);
+            se = array_push(&pool->server);
+            *se = *s;
+            (*s)->idx = m;
+
+            /* add server to table */
+            char *hashkey = (*s)->name.data;
+            log_debug(LOG_VERB, "add server:%s to hashtable", hashkey);
+
+            if (assoc_set(pool->server_table, hashkey, strlen(hashkey), *s) != NC_OK) {
+                log_warn("add server %s to hashtable failed", hashkey);
+            }
+        }
+
+        status = stats_reset_and_recover(ctx, &stats_pool, &server_idx_table);
+        if (status != NC_OK) {
+            log_warn("reset and recover stats failed");
+        }
+        stats_pool_copy_deinit(&stats_pool, &server_idx_table);
+
+        for (i = 0;i < array_n(&pool->server);i++) {
+            s = array_get(&pool->server, i);
 
             /*connect to server, if need */
             status = connect_to_server(*s);
             if (status != NC_OK) {
                 continue;
             }
-
-            se = array_push(&pool->server);
-            *se = *s;
-            (*s)->idx = m - n - 1;
-
-            /* add server to table */
-            char *hashkey = (*s)->hashkey;
-            log_debug(LOG_VVERB, "add server %s to hashtable", hashkey);
-
-            if (assoc_set(pool->server_table, hashkey, strlen(hashkey), *s) != NC_OK) {
-                log_warn("add server %s to hashtable failed", hashkey);
-            }
         }
-        log_debug(LOG_VVERB, "lua set %d servers", array_n(&pool->server));
-
-        struct context *ctx = pool->ctx;
-        struct stats *st = ctx->stats;
-        stats_reset(st, &ctx->pool);
-
-        pool->ffi_server_update = 0;
     }
 
     if (pool->ffi_slots_update) {
