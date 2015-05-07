@@ -872,6 +872,7 @@ void *server_script_thread(void *elem) {
         t_start = nc_usec_now();
         script_call(sp, sp->mbuf_thread->start, sp->mbuf_thread->last - sp->mbuf_thread->start, 
                     "update_cluster_nodes");
+        mbuf_put(sp->mbuf_thread);
         t_end = nc_usec_now();
         log_debug(LOG_VERB, "parse msg done in %lldus",t_end - t_start);
     }
@@ -1034,4 +1035,14 @@ server_pool_tick(struct context *ctx)
     pools = &ctx->pool;
 
     array_each(pools, server_pool_each_tick, NULL);
+}
+
+void
+server_conn_close(struct context *ctx, struct server *server)
+{
+    struct conn *conn;
+    while(!TAILQ_EMPTY(&server->s_conn_q)) {
+        conn = TAILQ_FIRST(&server->s_conn_q);
+        server_close(ctx, conn);
+    }
 }

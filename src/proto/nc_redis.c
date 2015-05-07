@@ -2987,7 +2987,12 @@ ferror:
         /* FIXME: check length */
         mbuf = STAILQ_FIRST(&msg->mhdr);
 
-        pool->mbuf_thread = mbuf;
+        pool->mbuf_thread = mbuf_get();
+        if (pool->mbuf_thread == NULL) {
+            return NC_ENOMEM;
+        }
+
+        mbuf_copy(pool->mbuf_thread, mbuf->start, mbuf->last - mbuf->start);
         req_put(pmsg);
 
         if (write(pool->notify_fd[1], "1", 1) != 1) {
@@ -3109,9 +3114,17 @@ redis_pool_tick(struct server_pool *pool)
     }
 
     if (pool->ffi_server_update) {
-        pool->ffi_server_update = 0;
+        uint32_t i, n, m;
+        struct server **s, **se;
+        rstatus_t status;
+
         struct context *ctx = pool->ctx;
         struct stats *st = ctx->stats;
+        struct stats_pool stats_pool;
+        struct hash_table *server_idx_table;
+        char *hashkey;
+
+        pool->ffi_server_update = 0;
 
         log_debug(LOG_VERB, "lua update pool info done, apply  now");
 
@@ -3122,17 +3135,13 @@ redis_pool_tick(struct server_pool *pool)
         }
         log_debug(LOG_VVVERB, "lua get %d servers", array_n(&pool->ffi_server));
 
+        n = array_n(&pool->server);
+        while (n--) {
+            s = array_get(&pool->server, n);
+            server_conn_close(ctx, *s);
+        }
 
         stats_aggregate_force(st);
-
-        uint32_t i, n, m;
-        struct server **s, **se;
-        rstatus_t status;
-
-        n = array_n(&pool->server);
-
-        struct stats_pool stats_pool;
-        struct hash_table *server_idx_table;
 
         status = stats_pool_copy_init(&stats_pool, pool, &server_idx_table);
         if (status != NC_OK) {
@@ -3144,22 +3153,16 @@ redis_pool_tick(struct server_pool *pool)
             log_warn("stats_pool_copy failed");
         }
 
-        while (n--) {
-            array_pop(&pool->server);
-        }
-
-        //pop ffi_server to server
         n = array_n(&pool->ffi_server);
         while (n--) {
             s = array_pop(&pool->ffi_server);
-
             m = array_n(&pool->server);
             se = array_push(&pool->server);
             *se = *s;
             (*s)->idx = m;
 
             /* add server to table */
-            char *hashkey = (*s)->name.data;
+            hashkey = (*s)->name.data;
             log_debug(LOG_VERB, "add server:%s to hashtable", hashkey);
 
             if (assoc_set(pool->server_table, hashkey, strlen(hashkey), *s) != NC_OK) {

@@ -114,6 +114,8 @@ struct stats {
 
     volatile int        aggregate;       /* shadow (b) aggregate? */
     volatile int        updated;         /* current (a) updated? */
+
+    pthread_mutex_t     stats_mutex;
 };
 
 #define DEFINE_ACTION(_name, _type, _desc) STATS_POOL_##_name,
@@ -213,7 +215,6 @@ rstatus_t stats_reset_and_recover(struct context *ctx, struct stats_pool *stp_sr
 void stats_destroy(struct stats *stats);
 void stats_swap(struct stats *stats);
 
-void stats_aggregate(struct stats *stats);
 void stats_aggregate_force(struct stats *stats);
 
 rstatus_t stats_pool_copy_init(struct stats_pool *stp, struct server_pool *sp, struct hash_table **sit);

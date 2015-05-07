@@ -664,7 +664,7 @@ stats_aggregate_metric(struct array *dst, struct array *src)
     }
 }
 
-void
+static void
 stats_aggregate(struct stats *st)
 {
     uint32_t i;
@@ -797,7 +797,9 @@ stats_loop_callback(void *arg1, void *arg2)
     int n = *((int *)arg2);
 
     /* aggregate stats from shadow (b) -> sum (c) */
+    pthread_mutex_lock(&st->stats_mutex);
     stats_aggregate(st);
+    pthread_mutex_unlock(&st->stats_mutex);
 
     if (n == 0) {
         return;
@@ -875,6 +877,7 @@ stats_start_aggregator(struct stats *st)
         log_error("stats aggregator create failed: %s", strerror(status));
         return NC_ERROR;
     }
+    pthread_mutex_init(&st->stats_mutex, NULL);
 
     return NC_OK;
 }
@@ -1071,6 +1074,7 @@ stats_swap(struct stats *st)
 void
 stats_aggregate_force(struct stats *st)
 {
+    pthread_mutex_lock(&st->stats_mutex);
     st->aggregate = 1;
     stats_aggregate(st);
 
@@ -1078,6 +1082,9 @@ stats_aggregate_force(struct stats *st)
     stats_swap(st);
     stats_aggregate(st);
 
+    stats_pool_reset(&st->shadow);
+    stats_pool_reset(&st->current);
+    pthread_mutex_unlock(&st->stats_mutex);
 }
 
 static struct stats_metric *
@@ -1289,7 +1296,7 @@ rstatus_t
 stats_pool_copy_init(struct stats_pool *stp, struct server_pool *sp, struct hash_table **sit)
 {
     rstatus_t status;
-
+    uint32_t nserver;
     uint32_t i;
 
     string_init(&stp->name);
@@ -1302,7 +1309,7 @@ stats_pool_copy_init(struct stats_pool *stp, struct server_pool *sp, struct hash
         return status;
     }
 
-    uint32_t nserver = array_n(&sp->server) == 0 ? array_n(&stp->server):array_n(&sp->server);
+    nserver = array_n(&sp->server) == 0 ? array_n(&stp->server):array_n(&sp->server);
     status = array_init(&stp->server, nserver, sizeof(struct stats_server));
     if (status != NC_OK) {
         return status;
@@ -1319,13 +1326,15 @@ stats_pool_copy_init(struct stats_pool *stp, struct server_pool *sp, struct hash
 void
 stats_pool_copy_deinit(struct stats_pool *stp, struct hash_table **sit)
 {
+    uint32_t nserver;
+    uint32_t i;
+    struct stats_server *sts;
+
     stats_metric_deinit(&stp->metric);
     string_deinit(&stp->name);
 
-    uint32_t nserver = array_n(&stp->server);
-    uint32_t i;
+    nserver = array_n(&stp->server);
     for (i = 0;i < nserver;i++) {
-        struct stats_server *sts;
         sts = array_pop(&stp->server);
         string_deinit(&stp->name);
 
@@ -1337,7 +1346,7 @@ stats_pool_copy_deinit(struct stats_pool *stp, struct hash_table **sit)
     (*sit) = NULL;
 }
 
-/* copy ctx->sum->pool[i] to stp*/
+/* copy ctx->sum->pool[i] to stp */
 rstatus_t
 stats_pool_copy(struct context *ctx, struct stats_pool *stp, struct hash_table **sit)
 {
@@ -1410,6 +1419,8 @@ stats_pool_copy_recover(struct context *ctx, struct stats_pool *stp_src, struct 
     struct stats_pool *stp_dst;
     struct stats_metric *stm_src, *stm_dst;
     struct stats_server *sts_src, *sts_dst;
+    char *key;
+    uint32_t sidx;
     for (i = 0;i < array_n(sum); i++) {
         /* get pool from array sum */
         stp_dst = array_get(sum, i);
@@ -1429,8 +1440,7 @@ stats_pool_copy_recover(struct context *ctx, struct stats_pool *stp_src, struct 
                 log_debug(LOG_VVVERB, "try recover server %s", sts_dst->name.data);
 
                 /* find the server in index hashtable */
-                char *key = sts_dst->name.data;
-                uint32_t sidx;
+                key = sts_dst->name.data;
                 sidx = (uint32_t)assoc_find(*sit, key, strlen(key));
                 if (sidx != NULL) {
                     sidx = sidx - 1;
@@ -1441,10 +1451,9 @@ stats_pool_copy_recover(struct context *ctx, struct stats_pool *stp_src, struct 
 
                     log_debug(LOG_VERB, "recovering server stats %s", sts_dst->name.data);
                     /* recover the old data */
-                    for (k = 0;k < array_n(&sts_src->metric); k++) {
+                    for (k = 0;k < array_n(&sts_src->metric) - 4; k++) {
                         stm_src = array_get(&sts_src->metric, k);
                         stm_dst = array_get(&sts_dst->metric, k);
-
                         stats_metric_copy(stm_dst, stm_src);
                     }
                 }
