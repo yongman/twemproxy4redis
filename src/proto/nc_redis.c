@@ -3153,6 +3153,8 @@ redis_pool_tick(struct server_pool *pool)
             log_warn("stats_pool_copy failed");
         }
 
+        pool->server.nelem = 0;
+
         n = array_n(&pool->ffi_server);
         while (n--) {
             s = array_pop(&pool->ffi_server);
