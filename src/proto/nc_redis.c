@@ -1705,6 +1705,7 @@ redis_parse_rsp(struct msg *r)
         SW_RUNTO_CRLF,
         SW_ALMOST_DONE,
         SW_SLOT_NUM,
+        SW_SLOT_ADDR_START,
         SW_SLOT_ADDR,
         SW_SENTINEL
     } state;
@@ -1727,6 +1728,18 @@ redis_parse_rsp(struct msg *r)
         switch (state) {
         case SW_START:
             r->type = MSG_UNKNOWN;
+
+            if (ch == '-') {
+                if (r->token == NULL) {
+                    r->token = p;
+                }
+                /* 7 == max('-MOVED ', '-ASK ') */
+                if (r->token + 7 >= b->last) {
+                    p = b->last - 1;
+                    break;
+                }
+            }
+
             switch (ch) {
             case '+':
                 p = p - 1; /* go back by 1 byte */
@@ -1737,10 +1750,12 @@ redis_parse_rsp(struct msg *r)
             case '-':
                 if (str5icmp((p+1), 'M', 'O', 'V', 'E', 'D')) {
                     r->type = MSG_RSP_REDIS_MOVED;
+                    r->token = NULL;
                     p += 6;
                     state = SW_SLOT_NUM;
                 } else if (str3icmp((p+1), 'A', 'S', 'K')) {
                     r->type = MSG_RSP_REDIS_ASK;
+                    r->token = NULL;
                     p += 4;
                     state = SW_SLOT_NUM;
                 } else {
@@ -2049,14 +2064,16 @@ redis_parse_rsp(struct msg *r)
 
         case SW_SLOT_NUM:
             if (ch == ' ') {
-                state = SW_SLOT_ADDR;
-                p++;
-                r->val_start = p;
+                state = SW_SLOT_ADDR_START;
                 break;
             }
+            r->integer *= 10;
             r->integer += ch - '0';
-            if (p[1] != ' ')
-                r->integer *= 10;
+            break;
+
+        case SW_SLOT_ADDR_START:
+            r->val_start = p;
+            state = SW_SLOT_ADDR;
             break;
 
         case SW_SLOT_ADDR:
@@ -2950,22 +2967,6 @@ redis_pre_rsp_forward(struct context *ctx, struct conn * s_conn, struct msg *msg
             log_debug(LOG_WARN, "redirect req %"PRIu64" len %"PRIu32" on s %d failed",
                       pmsg->id, pmsg->mlen, s_conn->sd);
             goto ferror;
-        }
-
-        /* need update slot? */
-        if (msg->type == MSG_RSP_REDIS_MOVED) {
-            uint8_t *key;
-            uint32_t keylen, idx;
-            struct keypos *kpos;
-
-            ASSERT(array_n(pmsg->keys) > 0);
-            kpos = array_get(pmsg->keys, 0);
-            key = kpos->start;
-            keylen = (uint32_t)(kpos->end - kpos->start);
-            idx = pool->key_hash((char*)key, keylen) % REDIS_CLUSTER_SLOTS;
-            if (msg->integer != idx) {
-                pool->slots[idx] = pool->slots[msg->integer];
-            }
         }
 
         msg_put(msg);
