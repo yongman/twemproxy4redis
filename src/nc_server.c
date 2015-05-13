@@ -382,7 +382,10 @@ server_close(struct context *ctx, struct conn *conn)
             msg->error = 1;
             msg->err = conn->err;
 
-            if (c_conn == NULL) continue;
+            if (c_conn == NULL) {
+                req_put(msg);
+                continue;
+            }
 
             ASSERT(c_conn->client && !c_conn->proxy);
 
@@ -414,13 +417,18 @@ server_close(struct context *ctx, struct conn *conn)
             req_put(msg);
         } else {
             c_conn = msg->owner;
-            if (c_conn == NULL) continue;
-
-            ASSERT(c_conn->client && !c_conn->proxy);
 
             msg->done = 1;
             msg->error = 1;
             msg->err = conn->err;
+
+            if (c_conn == NULL) {
+                req_put(msg);
+                continue;
+            }
+
+            ASSERT(c_conn->client && !c_conn->proxy);
+
             if (msg->frag_owner != NULL) {
                 msg->frag_owner->nfrag_done++;
             }
@@ -870,9 +878,12 @@ void *server_script_thread(void *elem) {
         }
         log_debug(LOG_VERB, "in server_scrip_thread: script_call");
         t_start = nc_usec_now();
-        script_call(sp, sp->mbuf_thread->start, sp->mbuf_thread->last - sp->mbuf_thread->start, 
+
+        script_call(sp, (uint8_t *)sp->probebuf, sp->nprobebuf, 
                     "update_cluster_nodes");
-        mbuf_put(sp->mbuf_thread);
+
+        sp->probebuf_busy = 0;
+
         t_end = nc_usec_now();
         log_debug(LOG_VERB, "parse msg done in %lldus",t_end - t_start);
     }

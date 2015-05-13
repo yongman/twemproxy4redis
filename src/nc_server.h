@@ -70,7 +70,6 @@ struct continuum {
     uint32_t value;  /* hash value */
 };
 
-#define MAX_ADDR_PORT_LEN 30
 struct server {
     uint32_t           idx;           /* server index */
     struct server_pool *owner;        /* owner pool */
@@ -89,7 +88,6 @@ struct server {
 
     int64_t            next_retry;    /* next retry time in usec */
     uint32_t           failure_count; /* # consecutive failures */
-    char               hashkey[MAX_ADDR_PORT_LEN];
 };
 
 #define NC_MAXTAGNUM 10
@@ -100,6 +98,7 @@ struct replicaset {
     struct array tagged_servers[NC_MAXTAGNUM];
 };
 
+#define REDIS_PROBE_BUF_SIZE 16384*2
 struct server_pool {
     uint32_t           idx;                  /* pool index */
     struct context     *ctx;                 /* owner context */
@@ -145,9 +144,12 @@ struct server_pool {
     struct string      zone;                 /* avaliablity zone */
     struct hash_table  *server_table;        /* address(ip:port) to server map */
     struct replicaset  *slots[REDIS_CLUSTER_SLOTS];
+
     pthread_t          script_thread;
     int                notify_fd[2];         /* pipe fd to notify thread */
-    struct mbuf        *mbuf_thread;         /* set the value before call the script thread */
+    char               probebuf[REDIS_PROBE_BUF_SIZE];
+    unsigned           nprobebuf;
+    volatile int       probebuf_busy;
     lua_State *L;
 
     /* added for lua script thread */
