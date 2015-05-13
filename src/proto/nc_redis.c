@@ -2857,7 +2857,7 @@ redis_routing(struct context *ctx, struct server_pool *pool,
 }
 
 static rstatus_t
-build_custom_message(struct msg *r, uint8_t *msgbody, size_t msglen, int swallow)
+build_custom_message(struct msg *r, uint8_t *msgbody, size_t msglen, int noreply)
 {
     struct mbuf *mbuf;
     size_t msize;
@@ -2877,7 +2877,7 @@ build_custom_message(struct msg *r, uint8_t *msgbody, size_t msglen, int swallow
     
     mbuf_copy(mbuf, msgbody, msglen);
     r->mlen += (uint32_t)msglen;
-    r->swallow = swallow;
+    r->noreply = noreply;
     
     return NC_OK;
 }
@@ -2964,7 +2964,7 @@ redis_pre_rsp_forward(struct context *ctx, struct conn * s_conn, struct msg *msg
         /* resend the msg to the new server */
         status = req_enqueue(ctx, s_conn, c_conn, pmsg);
         if (status != NC_OK) {
-            log_debug(LOG_WARN, "redirect req %"PRIu64" len %"PRIu32" on s %d failed",
+            log_warn("redirect req %"PRIu64" len %"PRIu32" on s %d failed",
                       pmsg->id, pmsg->mlen, s_conn->sd);
             goto ferror;
         }
@@ -2974,7 +2974,7 @@ redis_pre_rsp_forward(struct context *ctx, struct conn * s_conn, struct msg *msg
 
 ferror:
         
-        log_debug(LOG_WARN, "server: failed to redirect message");
+        log_warn("server: failed to redirect message");
 
         msg_put(pmsg);
         msg_put(msg);
@@ -2988,16 +2988,22 @@ ferror:
         /* FIXME: check length */
         mbuf = STAILQ_FIRST(&msg->mhdr);
 
-        pool->mbuf_thread = mbuf_get();
-        if (pool->mbuf_thread == NULL) {
-            return NC_ENOMEM;
+        pool->nprobebuf = mbuf->last - mbuf->start;
+        /* FIXME: buffer length */
+        if (pool->nprobebuf > REDIS_PROBE_BUF_SIZE) {
+            req_put(pmsg);
+            return NC_ERROR;
         }
-
-        mbuf_copy(pool->mbuf_thread, mbuf->start, mbuf->last - mbuf->start);
+        if (pool->probebuf_busy == 0) {
+            pool->probebuf_busy = 1;
+            memcpy(pool->probebuf, mbuf->start, pool->nprobebuf);
+        } else {
+            log_debug(LOG_VERB, "probe buffer is busy, ignore this probe message");
+        }
         req_put(pmsg);
 
         if (write(pool->notify_fd[1], "1", 1) != 1) {
-            log_debug(LOG_WARN, "write to pipe failed");
+            log_warn("write to pipe failed");
         }
         return NC_ERROR;
     }
