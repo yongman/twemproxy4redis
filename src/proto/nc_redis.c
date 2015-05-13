@@ -3154,8 +3154,8 @@ redis_pool_tick(struct server_pool *pool)
         if (status != NC_OK) {
             log_warn("stats_pool_copy_init failed");
         }
-
         status = stats_pool_copy(ctx, &stats_pool, &server_idx_table);
+
         if (status != NC_OK) {
             log_warn("stats_pool_copy failed");
         }

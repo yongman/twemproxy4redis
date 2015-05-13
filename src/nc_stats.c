@@ -1391,7 +1391,6 @@ stats_pool_copy(struct context *ctx, struct stats_pool *stp, struct hash_table *
                 }
                 string_init(&sts_dst->name);
                 string_duplicate(&sts_dst->name, &sts_src->name);
-                log_debug(LOG_VVVERB, "sts_dst->name is %s", (sts_dst->name).data);
 
                 /* copy the metric array in one server */
                 log_debug(LOG_VVVERB, "array_n server->metric is %d", array_n(&sts_src->metric));
@@ -1427,9 +1426,9 @@ stats_pool_copy_recover(struct context *ctx, struct stats_pool *stp_src, struct 
         /* find the pool */
         if (string_compare(&stp_src->name, &stp_dst->name) == 0) {
             /* recover the metric array */
-            for (j = 0;j < array_n(&stp_dst->metric);j++) {
-                stm_src = array_get(&stp_dst->metric, j);
-                stm_dst = array_get(&stp_src->metric, j);
+            for (j = 0;j < array_n(&stp_src->metric);j++) {
+                stm_src = array_get(&stp_src->metric, j);
+                stm_dst = array_get(&stp_dst->metric, j);
 
                 stats_metric_copy(stm_dst, stm_src);
             }
