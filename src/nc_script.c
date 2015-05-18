@@ -260,7 +260,7 @@ set_lua_path(lua_State* L, const char* path)
 {
     /* save the package.path var */
     char lua_path[MAX_PATH_LEN] = {'\0'};
-    char *str;
+    const char *str;
     lua_getglobal(L, "package");
 
     /* get field "path" from table at top of stack (-1) */

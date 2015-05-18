@@ -148,7 +148,7 @@ struct server_pool {
     pthread_t          script_thread;
     int                notify_fd[2];         /* pipe fd to notify thread */
     char               probebuf[REDIS_PROBE_BUF_SIZE];
-    unsigned           nprobebuf;
+    int                nprobebuf;
     volatile int       probebuf_busy;
     lua_State *L;
 

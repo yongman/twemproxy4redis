@@ -3129,7 +3129,7 @@ redis_pool_tick(struct server_pool *pool)
         struct stats *st = ctx->stats;
         struct stats_pool stats_pool;
         struct hash_table *server_idx_table;
-        char *hashkey;
+        uint8_t *hashkey;
 
         pool->ffi_server_update = 0;
 
