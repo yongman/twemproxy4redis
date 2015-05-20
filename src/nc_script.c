@@ -368,9 +368,10 @@ script_call(struct server_pool *pool, const uint8_t *body, int len, const char *
 
     /* Call update function */
     if (lua_pcall(L, 1, 0, 0) != 0) {
-        log_debug(LOG_WARN, "script: call %s failed - %s", func_name, lua_tostring(L, -1));
-        /* pop the error from stack */
-        while(lua_gettop(L)) {
+        log_warn("script: call %s failed", func_name);
+        /* output and pop the error from stack */
+            while(lua_gettop(L) > 0) {
+            log_warn(lua_tostring(L, 1));
             lua_pop(L,1);
         }
         return NC_ERROR;
