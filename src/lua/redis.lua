@@ -12,8 +12,18 @@ function parse(lines)
    for i,line in ipairs(lines) do
       if string.sub(line,1,2) ~= "# " then
          local xs = line:split(" ")
+         -- skip update in this round
+         if string.find(xs[5], "noaddr") ~= nil or
+             string.find(xs[5], "handshake") ~= nil or
+             xs[2] == "-" then
+             error("parse: server state maybe noaddr,handshake,notag... please check")
+             return
+         end
+
          local addr = xs[4]:split(":")
-         if string.len(addr[1]) ~= 0  and string.find(xs[5], "handshake") == nil then
+         if string.len(addr[1]) ~= 0  and
+             (string.find(xs[5], "master") ~= nil or
+             string.find(xs[5], "slave") ~= nil) then
             table.insert(node_lines,line)
          end
       end
