@@ -13,12 +13,10 @@ function parse(lines)
       if string.sub(line,1,2) ~= "# " then
          local xs = line:split(" ")
          local addr = xs[4]:split(":")
-         if string.len(addr[1]) ~= 0 then
+         if string.len(addr[1]) ~= 0  and string.find(xs[5], "handshake") == nil then
             table.insert(node_lines,line)
          end
       end
-
-
    end
 
    if #node_lines < 3 then
