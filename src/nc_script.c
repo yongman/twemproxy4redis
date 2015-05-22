@@ -93,12 +93,9 @@ void
 ffi_replicaset_deinit(struct replicaset *rs)
 {
     int i;
-
     for (i = 0; i < NC_MAXTAGNUM; i++) {
-        uint32_t n = array_n(&rs->tagged_servers[i]);
-        while (n--) {
-            array_pop(&rs->tagged_servers[i]);
-        }
+        /* just reset the nelem, mem can be reused */
+        rs->tagged_servers[i].nelem = 0;
     }
     rs->master = NULL;
 }
@@ -106,7 +103,12 @@ ffi_replicaset_deinit(struct replicaset *rs)
 void
 ffi_replicaset_delete(struct replicaset *rs)
 {
-    ffi_replicaset_deinit(rs);
+    int i;
+    for (i = 0; i < NC_MAXTAGNUM; i++) {
+        /* deinit array */
+        array_deinit(&rs->tagged_servers[i]);
+    }
+    rs->master = NULL;
     nc_free(rs);
 }
 
@@ -227,10 +229,7 @@ ffi_pool_get_zone(struct server_pool *pool) {
 
 void
 ffi_pool_clear_servers(struct server_pool *pool) {
-    uint32_t n = array_n(&pool->ffi_server);
-    while (n--) {
-        array_pop(&pool->ffi_server);
-    }
+    pool->ffi_server.nelem = 0;
 }
 
 void
@@ -238,15 +237,12 @@ ffi_pool_add_server(struct server_pool *pool, struct server *server) {
     struct server **s;
 
     s = array_push(&pool->ffi_server);
-    *s = server;
-
-    log_debug(LOG_NOTICE, "prepare to add server %s", server->name.data);
-}
-
-rstatus_t
-ffi_server_table_set(struct server_pool *pool, const char *name, struct server *server)
-{
-    return assoc_set(pool->server_table, name, strlen(name), server);
+    if (s != NULL) {
+        *s = server;
+        log_debug(LOG_NOTICE, "prepare to add server %s", server->name.data);
+    } else {
+        log_warn("can not alloc memory");
+    }
 }
 
 void
@@ -323,6 +319,9 @@ script_init(struct server_pool *pool, const char *lua_path)
     lua_setglobal(L, "__pool");
 
     if (lua_pcall(L, 0, 0, 0) != 0) {
+        while(lua_gettop(L) > 0) {
+            lua_pop(L, 1);
+        }
         log_error("call lua script failed - %s", lua_tostring(L, -1));
     }
 
@@ -370,9 +369,9 @@ script_call(struct server_pool *pool, const uint8_t *body, int len, const char *
     if (lua_pcall(L, 1, 0, 0) != 0) {
         log_warn("script: call %s failed", func_name);
         /* output and pop the error from stack */
-            while(lua_gettop(L) > 0) {
+        while(lua_gettop(L) > 0) {
             log_warn(lua_tostring(L, 1));
-            lua_pop(L,1);
+            lua_pop(L, 1);
         }
         return NC_ERROR;
     }
