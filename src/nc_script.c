@@ -86,6 +86,10 @@ void
 ffi_replicaset_add_tagged_server(struct replicaset *rs, int tag_idx, struct server *server)
 {
     struct server **s = array_push(&rs->tagged_servers[tag_idx]);
+    if (s == NULL) {
+        log_warn("can not alloc memory");
+        return;
+    }
     *s = server;
 }
 
@@ -329,30 +333,30 @@ script_init(struct server_pool *pool, const char *lua_path)
 }
 
 void
-slots_debug(struct server_pool *pool)
+slots_debug(struct server_pool *pool, int level)
 {
-#if 1
-    int i = 0;
-    struct replicaset *last_rs = NULL;
-    for (i = 0; i < REDIS_CLUSTER_SLOTS; i++) {
-        struct replicaset *rs = pool->ffi_slots[i];
-        if (rs && last_rs != rs) {
-            last_rs = rs;
-            log_debug(LOG_VERB, "slot %5d master %.*s tags[%d,%d,%d,%d,%d]",
-                      i, 
-                      (rs->master ? rs->master->pname.len : 3), 
-                      (rs->master ? (char*)rs->master->pname.data : "nil"),
-                      array_n(&rs->tagged_servers[0]),
-                      array_n(&rs->tagged_servers[1]),
-                      array_n(&rs->tagged_servers[2]),
-                      array_n(&rs->tagged_servers[3]),
-                      array_n(&rs->tagged_servers[4]));
-        } else if (rs == NULL && last_rs != rs) {
-            last_rs = rs;
-            log_debug(LOG_VERB, "slot %5d owned by no server", i);
+    if (level > LOG_DEBUG) {
+        int i = 0;
+        struct replicaset *last_rs = NULL;
+        for (i = 0; i < REDIS_CLUSTER_SLOTS; i++) {
+            struct replicaset *rs = pool->ffi_slots[i];
+            if (rs && last_rs != rs) {
+                last_rs = rs;
+                log_debug(LOG_VERB, "slot %5d master %.*s tags[%d,%d,%d,%d,%d]",
+                        i,
+                        (rs->master ? rs->master->pname.len : 3),
+                        (rs->master ? (char*)rs->master->pname.data : "nil"),
+                        array_n(&rs->tagged_servers[0]),
+                        array_n(&rs->tagged_servers[1]),
+                        array_n(&rs->tagged_servers[2]),
+                        array_n(&rs->tagged_servers[3]),
+                        array_n(&rs->tagged_servers[4]));
+            } else if (rs == NULL && last_rs != rs) {
+                last_rs = rs;
+                log_debug(LOG_VERB, "slot %5d owned by no server", i);
+            }
         }
     }
-#endif
 }
 
 rstatus_t

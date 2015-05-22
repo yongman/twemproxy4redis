@@ -124,6 +124,10 @@ stats_pool_metric_init(struct array *stats_metric)
     for (i = 0; i < nfield; i++) {
         struct stats_metric *stm = array_push(stats_metric);
 
+        if (stm == NULL) {
+            return NC_ENOMEM;
+        }
+
         /* initialize from pool codec first */
         *stm = stats_pool_codec[i];
 
@@ -147,6 +151,10 @@ stats_server_metric_init(struct stats_server *sts)
 
     for (i = 0; i < nfield; i++) {
         struct stats_metric *stm = array_push(&sts->metric);
+
+        if (stm == NULL) {
+            return NC_ENOMEM;
+        }
 
         /* initialize from server codec first */
         *stm = stats_server_codec[i];
@@ -207,6 +215,9 @@ stats_server_map(struct array *stats_server, struct array *server)
     for (i = 0; i < nserver; i++) {
         struct server *s = *(struct server**)array_get(server, i);
         struct stats_server *sts = array_push(stats_server);
+        if (sts == NULL) {
+            return NC_ENOMEM;
+        }
 
         status = stats_server_init(sts, s);
         if (status != NC_OK) {
@@ -300,6 +311,9 @@ stats_pool_map(struct array *stats_pool, struct array *server_pool)
     for (i = 0; i < npool; i++) {
         struct server_pool *sp = array_get(server_pool, i);
         struct stats_pool *stp = array_push(stats_pool);
+        if (stp == NULL) {
+            return NC_ENOMEM;
+        }
 
         status = stats_pool_init(stp, sp);
         if (status != NC_OK) {
@@ -1367,6 +1381,9 @@ stats_pool_copy(struct context *ctx, struct stats_pool *stp, struct hash_table *
             for (j = 0;j < array_n(&istp->metric);j++) {
                 stm_src = array_get(&istp->metric, j);
                 stm_dst = array_push(&stp->metric);
+                if (stm_dst == NULL) {
+                    return NC_ENOMEM;
+                }
 
                 stats_metric_copy(stm_dst, stm_src);
             }
@@ -1384,6 +1401,9 @@ stats_pool_copy(struct context *ctx, struct stats_pool *stp, struct hash_table *
                 }
 
                 sts_dst = array_push(&stp->server);
+                if (stm_dst == NULL) {
+                    return NC_ENOMEM;
+                }
 
                 /*init dst server metric */
                 status = array_init(&sts_dst->metric, STATS_SERVER_NFIELD,
@@ -1400,6 +1420,9 @@ stats_pool_copy(struct context *ctx, struct stats_pool *stp, struct hash_table *
                     log_debug(LOG_VVVERB,"server->metric %d", k);
                     stm_src = array_get(&sts_src->metric, k);
                     stm_dst = array_push(&sts_dst->metric);
+                    if (stm_dst == NULL) {
+                        return NC_ENOMEM;
+                    }
 
                     stats_metric_copy(stm_dst, stm_src);
                 }

@@ -3200,7 +3200,7 @@ redis_pool_tick(struct server_pool *pool)
         /* update slots */
         memcpy(pool->slots, pool->ffi_slots, REDIS_CLUSTER_SLOTS * sizeof(struct replicaset *));
 
-        slots_debug(pool);
+        debug_slots(pool, LOG_VERB);
 
         pool->ffi_slots_update = 0;
     }
