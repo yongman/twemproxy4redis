@@ -896,14 +896,29 @@ stats_start_aggregator(struct stats *st)
     return NC_OK;
 }
 
-static void
+static rstatus_t
 stats_stop_aggregator(struct stats *st)
 {
+    rstatus_t status;
+
     if (!stats_enabled) {
-        return;
+        return NC_OK;
     }
 
+    status = pthread_cancel(st->tid);
+    if (status < 0) {
+        log_error("stats thread cancel failed");
+        close(st->sd);
+        return NC_ERROR;;
+    }
+    status = pthread_join(st->tid, NULL);
+    if (status < 0) {
+        log_error("stats thread join failed");
+        close(st->sd);
+        return NC_ERROR;
+    }
     close(st->sd);
+    return NC_OK;
 }
 
 struct stats *
@@ -996,7 +1011,10 @@ stats_reset_and_recover(struct context *ctx, struct stats_pool *stp_src, struct 
     st = ctx->stats;
     server_pool = &ctx->pool;
 
-    stats_stop_aggregator(st);
+    status = stats_stop_aggregator(st);
+    if (status < 0) {
+        return NC_ERROR;
+    }
     stats_pool_unmap(&st->sum);
     stats_pool_unmap(&st->shadow);
     stats_pool_unmap(&st->current);
