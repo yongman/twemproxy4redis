@@ -30,6 +30,8 @@
     /* forwarder behavior */                                                                                        \
     ACTION( forward_error,          STATS_COUNTER,      "# times we encountered a forwarding error")                \
     ACTION( fragments,              STATS_COUNTER,      "# fragments created from a multi-vector request")          \
+    ACTION( servers_update_at,      STATS_TIMESTAMP,    "timestamp when servers updated")                           \
+    ACTION( slots_update_at,        STATS_TIMESTAMP,    "timestamp when slots updated")                             \
 
 #define STATS_SERVER_CODEC(ACTION)                                                                                  \
     /* server behavior */                                                                                           \

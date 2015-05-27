@@ -3124,6 +3124,7 @@ redis_pool_tick(struct server_pool *pool)
         uint32_t i, n, m;
         struct server **s, **se;
         rstatus_t status;
+        int64_t now;
 
         struct context *ctx = pool->ctx;
         struct stats *st = ctx->stats;
@@ -3194,12 +3195,22 @@ redis_pool_tick(struct server_pool *pool)
                 continue;
             }
         }
+        now = nc_usec_now();
+        if (now > 0) {
+            stats_pool_set_ts(ctx, pool, servers_update_at, now);
+        }
     }
 
     if (pool->ffi_slots_update) {
         /* update slots */
+        int64_t now;
+
         memcpy(pool->slots, pool->ffi_slots, REDIS_CLUSTER_SLOTS * sizeof(struct replicaset *));
 
+        now = nc_usec_now();
+        if (now > 0) {
+            stats_pool_set_ts(pool->ctx, pool, slots_update_at, now);
+        }
         debug_slots(pool, LOG_VERB);
 
         pool->ffi_slots_update = 0;
