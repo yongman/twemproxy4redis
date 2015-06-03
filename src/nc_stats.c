@@ -1367,7 +1367,7 @@ stats_pool_copy_deinit(struct stats_pool *stp, struct hash_table **sit)
     nserver = array_n(&stp->server);
     for (i = 0;i < nserver;i++) {
         sts = array_pop(&stp->server);
-        string_deinit(&stp->name);
+        string_deinit(&sts->name);
 
         stats_metric_deinit(&sts->metric);
     }

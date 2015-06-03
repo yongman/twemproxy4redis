@@ -3132,6 +3132,8 @@ redis_pool_tick(struct server_pool *pool)
         struct hash_table *server_idx_table;
         uint8_t *hashkey;
 
+        struct array *old_servers = NULL;
+
         pool->ffi_server_update = 0;
 
         log_debug(LOG_VERB, "lua update pool info done, apply  now");
@@ -3143,6 +3145,16 @@ redis_pool_tick(struct server_pool *pool)
         }
         log_debug(LOG_VVVERB, "lua get %d servers", array_n(&pool->ffi_server));
 
+        /* free server in conf */
+        n = array_n(&pool->server);
+        if (pool->first_update == 0) {
+            old_servers = array_create(n, sizeof(struct server **));
+            while(n--) {
+                s = array_get(&pool->server,n);
+                se = array_push(old_servers);
+                *se = *s;
+            }
+        }
         n = array_n(&pool->server);
         while (n--) {
             s = array_get(&pool->server, n);
@@ -3179,6 +3191,14 @@ redis_pool_tick(struct server_pool *pool)
                 log_warn("add server %s to hashtable failed", hashkey);
             }
         }
+        if (pool->first_update == 0 && old_servers) {
+            n = array_n(old_servers);
+            while(n--) {
+                s = array_pop(old_servers);
+                nc_free(*s);
+            }
+            array_destroy(old_servers);
+        }
 
         status = stats_reset_and_recover(ctx, &stats_pool, &server_idx_table);
         if (status != NC_OK) {
@@ -3199,6 +3219,7 @@ redis_pool_tick(struct server_pool *pool)
         if (now > 0) {
             stats_pool_set_ts(ctx, pool, servers_update_at, now);
         }
+        pool->first_update = 1;
     }
 
     if (pool->ffi_slots_update) {

@@ -153,6 +153,7 @@ struct server_pool {
     lua_State *L;
 
     /* added for lua script thread */
+    unsigned           first_update:1;
     unsigned           ffi_server_update:1;
     unsigned           ffi_slots_update:1;
     struct array       ffi_server;

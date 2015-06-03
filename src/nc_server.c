@@ -909,6 +909,7 @@ server_pool_each_script_thread(void *elem, void *data)
 
     sp->ffi_server_update = 0;
     sp->ffi_slots_update = 0;
+    sp->first_update = 0;
 
     return NC_OK;
 }

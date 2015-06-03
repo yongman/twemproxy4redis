@@ -157,6 +157,9 @@ ffi_server_new(struct server_pool *pool, char *name, char *id, char *ip, int por
 
     s->next_retry = 0LL;
     s->failure_count = 0;
+
+    string_deinit(&address);
+
     return s;
 }
 
