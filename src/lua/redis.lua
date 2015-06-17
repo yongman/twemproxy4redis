@@ -24,7 +24,7 @@ function parse(lines)
          if string.len(addr[1]) ~= 0  and
              (string.find(xs[5], "master") ~= nil or
              string.find(xs[5], "slave") ~= nil) then
-            table.insert(node_lines,line)
+             table.insert(node_lines,line)
          end
       end
    end

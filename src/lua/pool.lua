@@ -43,6 +43,8 @@ function _M.fetch_server(self, config)
       s = server:new(config)
    else
       s = table.remove(self._se_pool, 1)
+      -- update config
+      s:update_config(config)
    end
 
    return s
@@ -147,6 +149,14 @@ function _M.build_replica_sets(self)
    for id,s in pairs(self.server_map) do
       if s:is_slave() then
          local ms = self.server_map[s.master_id]
+         if ms:is_slave() then
+             -- slave cascade
+             ms = self.server_map[ms.master_id]
+             if ms:is_slave() then
+                 error("slave cascade two level")
+                 return
+             end
+         end
          if ms ~= nil then
             local rs = ms.replica_set
             rs:add_tagged_server(s)
