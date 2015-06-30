@@ -86,6 +86,10 @@ void
 ffi_replicaset_add_tagged_server(struct replicaset *rs, int tag_idx, struct server *server)
 {
     struct server **s = array_push(&rs->tagged_servers[tag_idx]);
+    if (s == NULL) {
+        log_warn("can not alloc memory");
+        return;
+    }
     *s = server;
 }
 
@@ -93,12 +97,9 @@ void
 ffi_replicaset_deinit(struct replicaset *rs)
 {
     int i;
-
     for (i = 0; i < NC_MAXTAGNUM; i++) {
-        uint32_t n = array_n(&rs->tagged_servers[i]);
-        while (n--) {
-            array_pop(&rs->tagged_servers[i]);
-        }
+        /* just reset the nelem, mem can be reused */
+        rs->tagged_servers[i].nelem = 0;
     }
     rs->master = NULL;
 }
@@ -106,7 +107,12 @@ ffi_replicaset_deinit(struct replicaset *rs)
 void
 ffi_replicaset_delete(struct replicaset *rs)
 {
-    ffi_replicaset_deinit(rs);
+    int i;
+    for (i = 0; i < NC_MAXTAGNUM; i++) {
+        /* deinit array */
+        array_deinit(&rs->tagged_servers[i]);
+    }
+    rs->master = NULL;
     nc_free(rs);
 }
 
@@ -151,6 +157,9 @@ ffi_server_new(struct server_pool *pool, char *name, char *id, char *ip, int por
 
     s->next_retry = 0LL;
     s->failure_count = 0;
+
+    string_deinit(&address);
+
     return s;
 }
 
@@ -227,10 +236,7 @@ ffi_pool_get_zone(struct server_pool *pool) {
 
 void
 ffi_pool_clear_servers(struct server_pool *pool) {
-    uint32_t n = array_n(&pool->ffi_server);
-    while (n--) {
-        array_pop(&pool->ffi_server);
-    }
+    pool->ffi_server.nelem = 0;
 }
 
 void
@@ -238,15 +244,12 @@ ffi_pool_add_server(struct server_pool *pool, struct server *server) {
     struct server **s;
 
     s = array_push(&pool->ffi_server);
-    *s = server;
-
-    log_debug(LOG_NOTICE, "prepare to add server %s", server->name.data);
-}
-
-rstatus_t
-ffi_server_table_set(struct server_pool *pool, const char *name, struct server *server)
-{
-    return assoc_set(pool->server_table, name, strlen(name), server);
+    if (s != NULL) {
+        *s = server;
+        log_debug(LOG_NOTICE, "prepare to add server %s", server->name.data);
+    } else {
+        log_warn("can not alloc memory");
+    }
 }
 
 void
@@ -260,7 +263,7 @@ set_lua_path(lua_State* L, const char* path)
 {
     /* save the package.path var */
     char lua_path[MAX_PATH_LEN] = {'\0'};
-    char *str;
+    const char *str;
     lua_getglobal(L, "package");
 
     /* get field "path" from table at top of stack (-1) */
@@ -323,6 +326,9 @@ script_init(struct server_pool *pool, const char *lua_path)
     lua_setglobal(L, "__pool");
 
     if (lua_pcall(L, 0, 0, 0) != 0) {
+        while(lua_gettop(L) > 0) {
+            lua_pop(L, 1);
+        }
         log_error("call lua script failed - %s", lua_tostring(L, -1));
     }
 
@@ -330,30 +336,30 @@ script_init(struct server_pool *pool, const char *lua_path)
 }
 
 void
-slots_debug(struct server_pool *pool)
+slots_debug(struct server_pool *pool, int level)
 {
-#if 1
-    int i = 0;
-    struct replicaset *last_rs = NULL;
-    for (i = 0; i < REDIS_CLUSTER_SLOTS; i++) {
-        struct replicaset *rs = pool->ffi_slots[i];
-        if (rs && last_rs != rs) {
-            last_rs = rs;
-            log_debug(LOG_VERB, "slot %5d master %.*s tags[%d,%d,%d,%d,%d]",
-                      i, 
-                      (rs->master ? rs->master->pname.len : 3), 
-                      (rs->master ? (char*)rs->master->pname.data : "nil"),
-                      array_n(&rs->tagged_servers[0]),
-                      array_n(&rs->tagged_servers[1]),
-                      array_n(&rs->tagged_servers[2]),
-                      array_n(&rs->tagged_servers[3]),
-                      array_n(&rs->tagged_servers[4]));
-        } else if (rs == NULL && last_rs != rs) {
-            last_rs = rs;
-            log_debug(LOG_VERB, "slot %5d owned by no server", i);
+    if (level > LOG_DEBUG) {
+        int i = 0;
+        struct replicaset *last_rs = NULL;
+        for (i = 0; i < REDIS_CLUSTER_SLOTS; i++) {
+            struct replicaset *rs = pool->ffi_slots[i];
+            if (rs && last_rs != rs) {
+                last_rs = rs;
+                log_debug(LOG_VERB, "slot %5d master %.*s tags[%d,%d,%d,%d,%d]",
+                        i,
+                        (rs->master ? rs->master->pname.len : 3),
+                        (rs->master ? (char*)rs->master->pname.data : "nil"),
+                        array_n(&rs->tagged_servers[0]),
+                        array_n(&rs->tagged_servers[1]),
+                        array_n(&rs->tagged_servers[2]),
+                        array_n(&rs->tagged_servers[3]),
+                        array_n(&rs->tagged_servers[4]));
+            } else if (rs == NULL && last_rs != rs) {
+                last_rs = rs;
+                log_debug(LOG_VERB, "slot %5d owned by no server", i);
+            }
         }
     }
-#endif
 }
 
 rstatus_t
@@ -368,10 +374,13 @@ script_call(struct server_pool *pool, const uint8_t *body, int len, const char *
 
     /* Call update function */
     if (lua_pcall(L, 1, 0, 0) != 0) {
-        log_debug(LOG_WARN, "script: call %s failed - %s", func_name, lua_tostring(L, -1));
+        log_warn("script: call %s failed", func_name);
+        /* output and pop the error from stack */
+        while(lua_gettop(L) > 0) {
+            log_warn(lua_tostring(L, 1));
+            lua_pop(L, 1);
+        }
         return NC_ERROR;
     }
-
-
     return NC_OK;
 }

@@ -124,6 +124,10 @@ stats_pool_metric_init(struct array *stats_metric)
     for (i = 0; i < nfield; i++) {
         struct stats_metric *stm = array_push(stats_metric);
 
+        if (stm == NULL) {
+            return NC_ENOMEM;
+        }
+
         /* initialize from pool codec first */
         *stm = stats_pool_codec[i];
 
@@ -147,6 +151,10 @@ stats_server_metric_init(struct stats_server *sts)
 
     for (i = 0; i < nfield; i++) {
         struct stats_metric *stm = array_push(&sts->metric);
+
+        if (stm == NULL) {
+            return NC_ENOMEM;
+        }
 
         /* initialize from server codec first */
         *stm = stats_server_codec[i];
@@ -207,6 +215,9 @@ stats_server_map(struct array *stats_server, struct array *server)
     for (i = 0; i < nserver; i++) {
         struct server *s = *(struct server**)array_get(server, i);
         struct stats_server *sts = array_push(stats_server);
+        if (sts == NULL) {
+            return NC_ENOMEM;
+        }
 
         status = stats_server_init(sts, s);
         if (status != NC_OK) {
@@ -300,6 +311,9 @@ stats_pool_map(struct array *stats_pool, struct array *server_pool)
     for (i = 0; i < npool; i++) {
         struct server_pool *sp = array_get(server_pool, i);
         struct stats_pool *stp = array_push(stats_pool);
+        if (stp == NULL) {
+            return NC_ENOMEM;
+        }
 
         status = stats_pool_init(stp, sp);
         if (status != NC_OK) {
@@ -882,14 +896,29 @@ stats_start_aggregator(struct stats *st)
     return NC_OK;
 }
 
-static void
+static rstatus_t
 stats_stop_aggregator(struct stats *st)
 {
+    rstatus_t status;
+
     if (!stats_enabled) {
-        return;
+        return NC_OK;
     }
 
+    status = pthread_cancel(st->tid);
+    if (status < 0) {
+        log_error("stats thread cancel failed");
+        close(st->sd);
+        return NC_ERROR;;
+    }
+    status = pthread_join(st->tid, NULL);
+    if (status < 0) {
+        log_error("stats thread join failed");
+        close(st->sd);
+        return NC_ERROR;
+    }
     close(st->sd);
+    return NC_OK;
 }
 
 struct stats *
@@ -982,7 +1011,10 @@ stats_reset_and_recover(struct context *ctx, struct stats_pool *stp_src, struct 
     st = ctx->stats;
     server_pool = &ctx->pool;
 
-    stats_stop_aggregator(st);
+    status = stats_stop_aggregator(st);
+    if (status < 0) {
+        return NC_ERROR;
+    }
     stats_pool_unmap(&st->sum);
     stats_pool_unmap(&st->shadow);
     stats_pool_unmap(&st->current);
@@ -1297,7 +1329,6 @@ stats_pool_copy_init(struct stats_pool *stp, struct server_pool *sp, struct hash
 {
     rstatus_t status;
     uint32_t nserver;
-    uint32_t i;
 
     string_init(&stp->name);
     string_duplicate(&stp->name, &sp->name);
@@ -1336,7 +1367,7 @@ stats_pool_copy_deinit(struct stats_pool *stp, struct hash_table **sit)
     nserver = array_n(&stp->server);
     for (i = 0;i < nserver;i++) {
         sts = array_pop(&stp->server);
-        string_deinit(&stp->name);
+        string_deinit(&sts->name);
 
         stats_metric_deinit(&sts->metric);
     }
@@ -1352,6 +1383,7 @@ stats_pool_copy(struct context *ctx, struct stats_pool *stp, struct hash_table *
 {
     rstatus_t status;
     uint32_t i, j, k;
+    uint64_t idx_data;
     struct stats *st =  ctx->stats;
     struct array *sum = &st->sum;
 
@@ -1367,6 +1399,9 @@ stats_pool_copy(struct context *ctx, struct stats_pool *stp, struct hash_table *
             for (j = 0;j < array_n(&istp->metric);j++) {
                 stm_src = array_get(&istp->metric, j);
                 stm_dst = array_push(&stp->metric);
+                if (stm_dst == NULL) {
+                    return NC_ENOMEM;
+                }
 
                 stats_metric_copy(stm_dst, stm_src);
             }
@@ -1375,13 +1410,18 @@ stats_pool_copy(struct context *ctx, struct stats_pool *stp, struct hash_table *
                 sts_src = array_get(&istp->server, j);
 
                 /* add server idx to hashtable */
-                status = assoc_set(*sit, sts_src->name.data, strlen(sts_src->name.data),
-                                   (void *)(j+1)); // TODO trick here. avoid assert
+                idx_data = j + 1;
+                status = assoc_set(*sit, (char *)sts_src->name.data,
+                                   strlen((char *)sts_src->name.data),
+                                   (void *)idx_data); // TODO trick here. avoid assert
                 if (status != NC_OK) {
                     return status;
                 }
 
                 sts_dst = array_push(&stp->server);
+                if (stm_dst == NULL) {
+                    return NC_ENOMEM;
+                }
 
                 /*init dst server metric */
                 status = array_init(&sts_dst->metric, STATS_SERVER_NFIELD,
@@ -1398,6 +1438,9 @@ stats_pool_copy(struct context *ctx, struct stats_pool *stp, struct hash_table *
                     log_debug(LOG_VVVERB,"server->metric %d", k);
                     stm_src = array_get(&sts_src->metric, k);
                     stm_dst = array_push(&sts_dst->metric);
+                    if (stm_dst == NULL) {
+                        return NC_ENOMEM;
+                    }
 
                     stats_metric_copy(stm_dst, stm_src);
                 }
@@ -1410,7 +1453,6 @@ stats_pool_copy(struct context *ctx, struct stats_pool *stp, struct hash_table *
 static rstatus_t
 stats_pool_copy_recover(struct context *ctx, struct stats_pool *stp_src, struct hash_table **sit)
 {
-    rstatus_t status;
     uint32_t i, j, k;
     struct stats *st =  ctx->stats;
     struct array *sum = &st->sum;
@@ -1419,7 +1461,7 @@ stats_pool_copy_recover(struct context *ctx, struct stats_pool *stp_src, struct 
     struct stats_metric *stm_src, *stm_dst;
     struct stats_server *sts_src, *sts_dst;
     char *key;
-    uint32_t sidx;
+    uint64_t sidx;
     for (i = 0;i < array_n(sum); i++) {
         /* get pool from array sum */
         stp_dst = array_get(sum, i);
@@ -1439,12 +1481,12 @@ stats_pool_copy_recover(struct context *ctx, struct stats_pool *stp_src, struct 
                 log_debug(LOG_VVVERB, "try recover server %s", sts_dst->name.data);
 
                 /* find the server in index hashtable */
-                key = sts_dst->name.data;
-                sidx = (uint32_t)assoc_find(*sit, key, strlen(key));
-                if (sidx != NULL) {
+                key = (char *)sts_dst->name.data;
+                sidx = (uint64_t)assoc_find(*sit, key, strlen(key));
+                if (sidx > 0) {
                     sidx = sidx - 1;
                     /* get server data in array */
-                    sts_src = array_get(&stp_src->server, sidx);
+                    sts_src = array_get(&stp_src->server, (uint32_t)sidx);
 
                     ASSERT(string_compare(&sts_dst->name, &sts_src->name) == 0);
 

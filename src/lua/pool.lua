@@ -43,6 +43,8 @@ function _M.fetch_server(self, config)
       s = server:new(config)
    else
       s = table.remove(self._se_pool, 1)
+      -- update config
+      s:update_config(config)
    end
 
    return s
@@ -98,7 +100,6 @@ function _M.set_servers(self, configs)
    -- Drop servers that we no longer use
    for id, s in pairs(tmp_server_map) do
       C.ffi_server_table_delete(__pool, s.addr)
-      print("delete server from table", s.addr)
       self:put_server(s)
    end
 
@@ -118,7 +119,6 @@ function _M.set_servers(self, configs)
    end
 
    if server_changed then
-      print("server list changed, will update stats and server_table")
       -- Reset stats
       C.ffi_pool_clear_servers(__pool)
 
@@ -149,6 +149,14 @@ function _M.build_replica_sets(self)
    for id,s in pairs(self.server_map) do
       if s:is_slave() then
          local ms = self.server_map[s.master_id]
+         if ms:is_slave() then
+             -- slave cascade
+             ms = self.server_map[ms.master_id]
+             if ms:is_slave() then
+                 error("slave cascade two level")
+                 return
+             end
+         end
          if ms ~= nil then
             local rs = ms.replica_set
             rs:add_tagged_server(s)

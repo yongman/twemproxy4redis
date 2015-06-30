@@ -12,9 +12,19 @@ function parse(lines)
    for i,line in ipairs(lines) do
       if string.sub(line,1,2) ~= "# " then
          local xs = line:split(" ")
+         -- skip update in this round
+         if string.find(xs[5], "noaddr") ~= nil or
+             string.find(xs[5], "handshake") ~= nil or
+             xs[2] == "-" then
+             error("parse: server state maybe noaddr,handshake,notag... please check")
+             return
+         end
+
          local addr = xs[4]:split(":")
-         if string.len(addr[1]) ~= 0 then
-            table.insert(node_lines,line)
+         if string.len(addr[1]) ~= 0  and
+             (string.find(xs[5], "master") ~= nil or
+             string.find(xs[5], "slave") ~= nil) then
+             table.insert(node_lines,line)
          end
       end
 
@@ -22,7 +32,7 @@ function parse(lines)
    end
 
    if #node_lines < 3 then
-       error("not enough nodes")
+       error("parse: not enough nodes")
        return
    end
 
@@ -98,11 +108,11 @@ function update_cluster_nodes(msg)
    local lines = msg:strip():split("\n")
    local bytes = tonumber(string.sub(lines[1],2,-1))
    if bytes == nil then
-      error("nodes info invalid")
+      error("update_cluster_nodes: nodes info invalid")
       return
    end
    if bytes > 16384 then
-      error("nodes info too large > 16384 (FIXME)")
+      error("update_cluster_nodes: nodes info too large > 16384 (FIXME)")
       return
    end
    table.remove(lines, 1)
@@ -111,12 +121,12 @@ function update_cluster_nodes(msg)
    local configs = parse(lines)
 
    if #configs == 0 then
-      error("no server found")
+      error("update_cluster_nodes: no server found")
       return
    end
 
    if #configs == 1 and configs[1].ranges ~= nil and #configs[1].ranges == 0 then
-      error("free node found")
+      error("update_cluster_nodes: free node found")
       return
    end
 

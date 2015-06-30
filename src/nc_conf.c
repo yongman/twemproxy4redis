@@ -1463,7 +1463,6 @@ conf_set_listen(struct conf *cf, struct command *cmd, void *conf)
 
     if (value->data[0] == '/') {
         uint8_t *q, *start, *perm;
-        uint32_t permlen;
 
         /* parse "socket_path permissions" from the end */
         p = value->data + value->len -1;
@@ -1475,7 +1474,6 @@ conf_set_listen(struct conf *cf, struct command *cmd, void *conf)
             namelen = value->len;
         } else {
             perm = q + 1;
-            permlen = (uint32_t)(p - perm + 1);
 
             p = q - 1;
             name = start;

@@ -30,6 +30,8 @@
     /* forwarder behavior */                                                                                        \
     ACTION( forward_error,          STATS_COUNTER,      "# times we encountered a forwarding error")                \
     ACTION( fragments,              STATS_COUNTER,      "# fragments created from a multi-vector request")          \
+    ACTION( servers_update_at,      STATS_TIMESTAMP,    "timestamp when servers updated")                           \
+    ACTION( slots_update_at,        STATS_TIMESTAMP,    "timestamp when slots updated")                             \
 
 #define STATS_SERVER_CODEC(ACTION)                                                                                  \
     /* server behavior */                                                                                           \
@@ -218,6 +220,7 @@ void stats_swap(struct stats *stats);
 void stats_aggregate_force(struct stats *stats);
 
 rstatus_t stats_pool_copy_init(struct stats_pool *stp, struct server_pool *sp, struct hash_table **sit);
+rstatus_t stats_pool_copy(struct context *ctx, struct stats_pool *stp, struct hash_table **sit);
 void stats_pool_copy_deinit(struct stats_pool *stp, struct hash_table **sit);
 
 #endif

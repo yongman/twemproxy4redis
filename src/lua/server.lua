@@ -45,7 +45,7 @@ function _M.new(self, config)
    s:update_config(config)
    s.raw = C.ffi_server_new(__pool, config.addr, s.id, s.ip, s.port)
    if s.raw == nil then
-      error("create server object failed.")
+       error("new: create server object failed.")
    end
    return s
 end

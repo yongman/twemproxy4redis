@@ -3124,12 +3124,15 @@ redis_pool_tick(struct server_pool *pool)
         uint32_t i, n, m;
         struct server **s, **se;
         rstatus_t status;
+        int64_t now;
 
         struct context *ctx = pool->ctx;
         struct stats *st = ctx->stats;
         struct stats_pool stats_pool;
         struct hash_table *server_idx_table;
-        char *hashkey;
+        uint8_t *hashkey;
+
+        struct array *old_servers = NULL;
 
         pool->ffi_server_update = 0;
 
@@ -3142,6 +3145,16 @@ redis_pool_tick(struct server_pool *pool)
         }
         log_debug(LOG_VVVERB, "lua get %d servers", array_n(&pool->ffi_server));
 
+        /* free server in conf */
+        n = array_n(&pool->server);
+        if (pool->first_update == 0) {
+            old_servers = array_create(n, sizeof(struct server **));
+            while(n--) {
+                s = array_get(&pool->server,n);
+                se = array_push(old_servers);
+                *se = *s;
+            }
+        }
         n = array_n(&pool->server);
         while (n--) {
             s = array_get(&pool->server, n);
@@ -3178,6 +3191,14 @@ redis_pool_tick(struct server_pool *pool)
                 log_warn("add server %s to hashtable failed", hashkey);
             }
         }
+        if (pool->first_update == 0 && old_servers) {
+            n = array_n(old_servers);
+            while(n--) {
+                s = array_pop(old_servers);
+                nc_free(*s);
+            }
+            array_destroy(old_servers);
+        }
 
         status = stats_reset_and_recover(ctx, &stats_pool, &server_idx_table);
         if (status != NC_OK) {
@@ -3194,13 +3215,24 @@ redis_pool_tick(struct server_pool *pool)
                 continue;
             }
         }
+        now = nc_usec_now();
+        if (now > 0) {
+            stats_pool_set_ts(ctx, pool, servers_update_at, now);
+        }
+        pool->first_update = 1;
     }
 
     if (pool->ffi_slots_update) {
         /* update slots */
+        int64_t now;
+
         memcpy(pool->slots, pool->ffi_slots, REDIS_CLUSTER_SLOTS * sizeof(struct replicaset *));
 
-        slots_debug(pool);
+        now = nc_usec_now();
+        if (now > 0) {
+            stats_pool_set_ts(pool->ctx, pool, slots_update_at, now);
+        }
+        debug_slots(pool, LOG_VERB);
 
         pool->ffi_slots_update = 0;
     }
