@@ -24,7 +24,7 @@ typedef void (*msg_parse_t)(struct msg *);
 typedef rstatus_t (*msg_add_auth_t)(struct context *ctx, struct conn *c_conn, struct conn *s_conn);
 typedef rstatus_t (*msg_fragment_t)(struct msg *, uint32_t, struct msg_tqh *);
 typedef void (*msg_coalesce_t)(struct msg *r);
-typedef rstatus_t (*msg_reply_t)(struct msg *r);
+typedef rstatus_t (*msg_reply_t)(struct context *ctx, struct msg *r);
 typedef struct conn *(*msg_routing_t)(struct context *, struct server_pool *, struct msg *, const uint8_t *key, uint32_t keylen);
 typedef rstatus_t (*msg_forward_t)(struct context *, struct conn *, struct msg *);
 
@@ -173,6 +173,10 @@ typedef enum msg_parse_result {
     ACTION( RSP_REDIS_MULTIBULK )                                                                   \
     ACTION( RSP_REDIS_ASK )                                                                         \
     ACTION( RSP_REDIS_MOVED )                                                                       \
+    ACTION( REQ_REDIS_NODES )                                                                             \
+    ACTION( REQ_REDIS_NODE ) \
+    ACTION( REQ_REDIS_SLOTS ) \
+    ACTION( REQ_REDIS_SLOT ) \
     ACTION( SENTINEL )                                                                              \
 
 
