@@ -35,6 +35,9 @@
 #define REDIS_CLUSTER_NODES_MESSAGE "*3\r\n$7\r\ncluster\r\n$5\r\nnodes\r\n$5\r\nextra\r\n"
 #define REDIS_CLUSTER_ASKING_MESSAGE "*1\r\n$6\r\nASKING\r\n"
 
+#define EMSG_REQ_TOO_LARGE "-ERR req msg length too large\r\n"
+#define EMSG_RSP_TOO_LARGE "-ERR rsp msg length too large\r\n"
+
 static rstatus_t redis_handle_auth_req(struct msg *request, struct msg *response);
 
 /*
@@ -2538,7 +2541,10 @@ redis_reply(struct msg *r)
     switch (r->type) {
     case MSG_REQ_REDIS_PING:
         return msg_append(response, (uint8_t *)REPL_PONG, nc_strlen(REPL_PONG));
-
+    case MSG_REQ_REDIS_TOO_LARGE:
+        log_warn("req %"PRIu64" from c %d exceed limit. msg_length %"PRIu64"", r->id,
+                 c_conn->sd, r->mlen);
+        return msg_append(response, (uint8_t *)EMSG_REQ_TOO_LARGE, nc_strlen(EMSG_REQ_TOO_LARGE));
     default:
         NOT_REACHED();
         return NC_ERROR;
@@ -3009,6 +3015,58 @@ ferror:
     }
 
     return NC_OK;
+}
+
+void
+redis_msg_size_check(struct msg *m, uint32_t limit) {
+
+    if (m->mlen <= limit) {
+        return;
+    }
+    if (m->request) {
+        /*
+        * set req to noforward
+        * and handle it in redis_reply handler
+        * */
+        m->noforward = 1;
+        m->type = MSG_REQ_REDIS_TOO_LARGE;
+    } else {
+        /*
+        * remove mbuf in this rsp
+        * set msg type
+        */
+        rstatus_t status;
+        struct conn *s_conn;
+
+        while (!STAILQ_EMPTY(&m->mhdr)) {
+            struct mbuf *mbuf = STAILQ_FIRST(&m->mhdr);
+            mbuf_remove(&m->mhdr, mbuf);
+            mbuf_put(mbuf);
+        }
+
+        if (m->frag_seq) {
+            nc_free(m->frag_seq);
+            m->frag_seq = NULL;
+        }
+
+        if (m->keys) {
+            m->keys->nelem = 0; /* a hack here */
+            array_destroy(m->keys);
+            m->keys = NULL;
+        }
+
+        s_conn = m->owner;
+
+        log_warn("rsp %"PRIu64" to s %d exceed limit. msg_length %"PRIu32"", m->id,
+                 s_conn->sd, m->mlen);
+        status = msg_append(m, (uint8_t *)EMSG_RSP_TOO_LARGE, nc_strlen(EMSG_RSP_TOO_LARGE));
+        if (status != NC_OK) {
+            log_warn("msg_append failed %s", strerror(errno));
+            return;
+        }
+    }
+
+    return;
 }
 
 static rstatus_t

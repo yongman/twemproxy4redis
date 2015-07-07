@@ -154,6 +154,7 @@ void redis_parse_req(struct msg *r);
 void redis_parse_rsp(struct msg *r);
 void redis_pre_coalesce(struct msg *r);
 void redis_post_coalesce(struct msg *r);
+void redis_msg_size_check(struct msg *m, uint32_t limit);
 rstatus_t redis_add_auth_packet(struct context *ctx, struct conn *c_conn, struct conn *s_conn);
 rstatus_t redis_fragment(struct msg *r, uint32_t ncontinuum, struct msg_tqh *frag_msgq);
 rstatus_t redis_reply(struct msg *r);

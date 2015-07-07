@@ -54,6 +54,7 @@
 #define CONF_DEFAULT_SERVER_FAILURE_LIMIT    2
 #define CONF_DEFAULT_SERVER_CONNECTIONS      1
 #define CONF_DEFAULT_KETAMA_PORT             11211
+#define CONF_DEFAULT_REDIS_MSG_LIMIT         64 * 1024
 
 struct conf_listen {
     struct string   pname;   /* listen: as "name:port" */
@@ -91,6 +92,7 @@ struct conf_pool {
     int                server_connections;    /* server_connections: */
     int                server_retry_timeout;  /* server_retry_timeout: in msec */
     int                server_failure_limit;  /* server_failure_limit: */
+    int                msg_max_length_limit;  /* msg max length limit */
     struct string      zone;                  /* avaliablity zone */
     struct array       server;                /* servers: conf_server[] */
     unsigned           valid:1;               /* valid? */

@@ -302,6 +302,8 @@ msg_get(struct conn *conn, bool request, bool redis)
         msg->routing = redis_routing;
         msg->pre_req_forward = redis_pre_req_forward;
         msg->pre_rsp_forward = redis_pre_rsp_forward;
+        msg->size_check = redis_msg_size_check;
+
     } else {
         if (request) {
             msg->parser = memcache_parse_req;
@@ -315,6 +317,7 @@ msg_get(struct conn *conn, bool request, bool redis)
         msg->routing = memcache_routing;
         msg->pre_req_forward = NULL;
         msg->pre_rsp_forward = NULL;
+        msg->size_check = NULL;
     }
 
     if (log_loggable(LOG_NOTICE) != 0) {

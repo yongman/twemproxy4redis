@@ -141,6 +141,8 @@ rsp_recv_next(struct context *ctx, struct conn *conn, bool alloc)
 static bool
 rsp_filter(struct context *ctx, struct conn *conn, struct msg *msg)
 {
+    struct server_pool *sp;
+    struct server *s;
     struct msg *pmsg;
 
     ASSERT(!conn->client && !conn->proxy);
@@ -197,6 +199,16 @@ rsp_filter(struct context *ctx, struct conn *conn, struct msg *msg)
         rsp_put(msg);
         req_put(pmsg);
         return true;
+    }
+
+    /*
+    * Handle msg length check
+    * this function will change the response msg to -ERR
+    */
+    if (msg->size_check) {
+        s = conn->owner;
+        sp = s->owner;
+        msg->size_check(msg, sp->msg_max_length_limit);
     }
 
     return false;
