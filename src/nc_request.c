@@ -625,7 +625,6 @@ req_recv_done(struct context *ctx, struct conn *conn, struct msg *msg,
               struct msg *nmsg)
 {
     rstatus_t status;
-    struct server_pool *pool;
     struct msg_tqh frag_msgq;
     struct msg *sub_msg;
     struct msg *tmsg; 			/* tmp next message */
@@ -665,9 +664,8 @@ req_recv_done(struct context *ctx, struct conn *conn, struct msg *msg,
     }
 
     /* do fragment */
-    pool = conn->owner;
     TAILQ_INIT(&frag_msgq);
-    status = msg->fragment(msg, pool->ncontinuum, &frag_msgq);
+    status = msg->fragment(msg, REDIS_CLUSTER_SLOTS, &frag_msgq);
     if (status != NC_OK) {
         if (!msg->noreply) {
             conn->enqueue_outq(ctx, conn, msg);

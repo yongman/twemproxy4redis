@@ -2159,6 +2159,11 @@ redis_copy_bulk(struct msg *dst, struct msg *src)
     }
 
     p = mbuf->pos;
+    /* mget may return -CROSSSLOT, return NC_ERROR to mark the conn err*/
+    if (*p == '-') {
+        return NC_ERROR;
+    }
+
     ASSERT(*p == '$');
     p++;
 
@@ -2393,6 +2398,8 @@ redis_fragment_argx(struct msg *r, uint32_t ncontinuum, struct msg_tqh *frag_msg
     struct mbuf *mbuf;
     struct msg **sub_msgs;
     uint32_t i;
+    struct conn *conn;
+    struct server_pool *pool;
     rstatus_t status;
 
     ASSERT(array_n(r->keys) == (r->narg - 1) / key_step);
@@ -2431,9 +2438,11 @@ redis_fragment_argx(struct msg *r, uint32_t ncontinuum, struct msg_tqh *frag_msg
 
     for (i = 0; i < array_n(r->keys); i++) {        /* for each key */
         struct msg *sub_msg;
+        uint32_t idx;
         struct keypos *kpos = array_get(r->keys, i);
-        uint32_t idx = msg_backend_idx(r, kpos->start, kpos->end - kpos->start);
-
+        conn = r->owner;
+        pool = conn->owner;
+        idx = server_pool_hash(pool, kpos->start, kpos->end - kpos->start) % REDIS_CLUSTER_SLOTS;
         if (sub_msgs[idx] == NULL) {
             sub_msgs[idx] = msg_get(r->owner, r->request, r->redis);
             if (sub_msgs[idx] == NULL) {
@@ -2812,7 +2821,7 @@ redis_routing(struct context *ctx, struct server_pool *pool,
                       idx, keylen, key);
             return NULL;
         }
-        
+
         if (msg->type > MSG_REQ_REDIS_WRITECMD_START) {
             server = pool->slots[idx]->master;
         } else {
@@ -2836,7 +2845,7 @@ redis_routing(struct context *ctx, struct server_pool *pool,
         }
 
         log_debug(LOG_VERB, "key '%.*s' maps to server '%.*s' in slot %d",
-                  keylen, key, server->pname.len, server->pname.data, idx);
+                 keylen, key, server->pname.len, server->pname.data, idx);
 
         /* pick a connection to the given server */
         s_conn = server_conn(server);
@@ -2863,7 +2872,7 @@ build_custom_message(struct msg *r, uint8_t *msgbody, size_t msglen, int noreply
     size_t msize;
 
     ASSERT(STAILQ_LAST(&r->mhdr, mbuf, next) == NULL);
-    
+
     mbuf = mbuf_get();
     if (mbuf == NULL) {
         return NC_ENOMEM;
