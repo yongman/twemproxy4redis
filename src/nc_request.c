@@ -473,6 +473,9 @@ req_make_reply(struct context *ctx, struct conn *conn, struct msg *req)
 static bool
 req_filter(struct context *ctx, struct conn *conn, struct msg *msg)
 {
+    struct server_pool *sp;
+    sp = conn->owner;
+
     ASSERT(conn->client && !conn->proxy);
 
     if (msg_empty(msg)) {
@@ -504,6 +507,13 @@ req_filter(struct context *ctx, struct conn *conn, struct msg *msg)
      */
     if (conn->need_auth) {
         msg->noforward = 1;
+    }
+
+    /*
+    * Handle msg_lenth check and handle it in redis_reply handler
+    */
+    if (msg->size_check) {
+        msg->size_check(msg, sp->msg_max_length_limit);
     }
 
     return false;

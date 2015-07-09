@@ -27,6 +27,7 @@ typedef void (*msg_coalesce_t)(struct msg *r);
 typedef rstatus_t (*msg_reply_t)(struct msg *r);
 typedef struct conn *(*msg_routing_t)(struct context *, struct server_pool *, struct msg *, const uint8_t *key, uint32_t keylen);
 typedef rstatus_t (*msg_forward_t)(struct context *, struct conn *, struct msg *);
+typedef void (*msg_sizecheck_t)(struct msg *r, uint32_t limit);
 
 typedef enum msg_parse_result {
     MSG_PARSE_OK,                         /* parsing ok */
@@ -165,7 +166,9 @@ typedef enum msg_parse_result {
     ACTION( REQ_REDIS_PING )                   /* redis requests - ping/quit */                     \
     ACTION( REQ_REDIS_QUIT )                                                                        \
     ACTION( REQ_REDIS_AUTH )                                                                        \
-    ACTION( REQ_REDIS_SELECT)                  /* only during init */                               \
+    ACTION( REQ_REDIS_SELECT )                  /* only during init */                              \
+    ACTION( REQ_REDIS_TOO_LARGE )                                                                   \
+    ACTION( RSP_REDIS_TOO_LARGE )                                                                   \
     ACTION( RSP_REDIS_STATUS )                 /* redis response */                                 \
     ACTION( RSP_REDIS_ERROR )                                                                       \
     ACTION( RSP_REDIS_INTEGER )                                                                     \
@@ -215,6 +218,7 @@ struct msg {
     msg_routing_t        routing;         /* message routing */
     msg_forward_t        pre_req_forward; /* message pre-forward */
     msg_forward_t        pre_rsp_forward; /* message post-forward */
+    msg_sizecheck_t      size_check;      /* message length check */
 
     msg_coalesce_t       pre_coalesce;    /* message pre-coalesce */
     msg_coalesce_t       post_coalesce;   /* message post-coalesce */

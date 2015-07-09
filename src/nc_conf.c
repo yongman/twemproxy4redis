@@ -106,6 +106,10 @@ static struct command conf_commands[] = {
       conf_set_num,
       offsetof(struct conf_pool, server_failure_limit) },
 
+    { string("msg_max_length_limit"),
+      conf_set_num,
+      offsetof(struct conf_pool, msg_max_length_limit) },
+
     { string("zone"),
       conf_set_string,
       offsetof(struct conf_pool, zone) },
@@ -213,6 +217,7 @@ conf_pool_init(struct conf_pool *cp, struct string *name)
     cp->server_connections = CONF_UNSET_NUM;
     cp->server_retry_timeout = CONF_UNSET_NUM;
     cp->server_failure_limit = CONF_UNSET_NUM;
+    cp->msg_max_length_limit = CONF_UNSET_NUM;
 
     array_null(&cp->server);
 
@@ -309,6 +314,7 @@ conf_pool_each_transform(void *elem, void *data)
     sp->server_connections = (uint32_t)cp->server_connections;
     sp->server_retry_timeout = (int64_t)cp->server_retry_timeout * 1000LL;
     sp->server_failure_limit = (uint32_t)cp->server_failure_limit;
+    sp->msg_max_length_limit = (uint32_t)cp->msg_max_length_limit;
     sp->auto_eject_hosts = cp->auto_eject_hosts ? 1 : 0;
     sp->preconnect = cp->preconnect ? 1 : 0;
     sp->zone = cp->zone;
@@ -366,6 +372,8 @@ conf_dump(struct conf *cf)
                   cp->server_retry_timeout);
         log_debug(LOG_VVERB, "  server_failure_limit: %d",
                   cp->server_failure_limit);
+        log_debug(LOG_VVERB, "  msg_max_length_limit: %d",
+                  cp->msg_max_length_limit);
 
         nserver = array_n(&cp->server);
         log_debug(LOG_VVERB, "  servers: %"PRIu32"", nserver);
@@ -1274,6 +1282,10 @@ conf_validate_pool(struct conf *cf, struct conf_pool *cp)
 
     if (cp->server_failure_limit == CONF_UNSET_NUM) {
         cp->server_failure_limit = CONF_DEFAULT_SERVER_FAILURE_LIMIT;
+    }
+
+    if (cp->msg_max_length_limit == CONF_UNSET_NUM) {
+        cp->msg_max_length_limit = CONF_DEFAULT_REDIS_MSG_LIMIT;
     }
 
     status = conf_validate_server(cf, cp);
