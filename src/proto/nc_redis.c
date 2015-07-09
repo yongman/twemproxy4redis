@@ -27,6 +27,9 @@
 #define REPL_OK     "+OK\r\n"
 #define REPL_PONG   "+PONG\r\n"
 
+#define NODES_INVALID "-ERR invalid server pool number for nodes command. try nodes 0\r\n"
+#define SLOTS_INVALID "-ERR invalid server pool number for slots command. try slots 0\r\n"
+
 #define AUTH_INVALID_PASSWORD "-ERR invalid password\r\n"
 #define AUTH_REQUIRE_PASSWORD "-NOAUTH Authentication required\r\n"
 #define AUTH_NO_PASSWORD "-ERR Client sent AUTH, but no password is set\r\n"
@@ -50,6 +53,8 @@ redis_argz(struct msg *r)
     switch (r->type) {
     case MSG_REQ_REDIS_PING:
     case MSG_REQ_REDIS_QUIT:
+    case MSG_REQ_REDIS_NODE:
+    case MSG_REQ_REDIS_SLOT:
         return true;
 
     default:
@@ -96,6 +101,8 @@ redis_arg0(struct msg *r)
     case MSG_REQ_REDIS_ZCARD:
     case MSG_REQ_REDIS_PFCOUNT:
     case MSG_REQ_REDIS_AUTH:
+    case MSG_REQ_REDIS_NODES:
+    case MSG_REQ_REDIS_SLOTS:
         return true;
 
     default:
@@ -650,6 +657,18 @@ redis_parse_req(struct msg *r)
                     break;
                 }
 
+                if (str4icmp(m, 'n', 'o', 'd', 'e')) {
+                    r->type = MSG_REQ_REDIS_NODE;
+                    r->noforward = 1;
+                    break;
+                }
+
+                if (str4icmp(m, 's', 'l', 'o', 't')) {
+                    r->type = MSG_REQ_REDIS_SLOT;
+                    r->noforward = 1;
+                    break;
+                }
+
                 break;
 
             case 5:
@@ -740,6 +759,18 @@ redis_parse_req(struct msg *r)
 
                 if (str5icmp(m, 'p', 'f', 'a', 'd', 'd')) {
                     r->type = MSG_REQ_REDIS_PFADD;
+                    break;
+                }
+
+                if (str5icmp(m, 'n', 'o', 'd', 'e', 's')) {
+                    r->type = MSG_REQ_REDIS_NODES;
+                    r->noforward = 1;
+                    break;
+                }
+
+                if (str5icmp(m, 's', 'l', 'o', 't', 's')) {
+                    r->type = MSG_REQ_REDIS_SLOTS;
+                    r->noforward = 1;
                     break;
                 }
 
@@ -1065,8 +1096,6 @@ redis_parse_req(struct msg *r)
                 log_error("parsed unsupported command '%.*s'", p - m, m);
                 goto error;
             }
-
-            log_debug(LOG_VERB, "parsed command '%.*s'", p - m, m);
 
             state = SW_REQ_TYPE_LF;
             break;
@@ -2530,11 +2559,62 @@ redis_fragment(struct msg *r, uint32_t ncontinuum, struct msg_tqh *frag_msgq)
     }
 }
 
+static rstatus_t
+redis_reply_topo(struct server_pool *pool, struct msg *response)
+{
+    #define HOST_NAME_MAX_LEN 30
+    rstatus_t status;
+    int i, j, k;
+    int count = 0;
+    struct replicaset *last_rs = NULL;
+
+    for (i = 0; i < REDIS_CLUSTER_SLOTS; i++) {
+        struct replicaset *rs = pool->slots[i];
+        if (last_rs != rs) {
+            last_rs = rs;
+            count++;
+            char res[REDIS_PROBE_BUF_SIZE] = {'\0'};
+            char tagged_servers[HOST_NAME_MAX_LEN];
+            sprintf(res, "slot %5d master %.*s tags[%d,%d,%d,%d,%d]",
+                        i,
+                        (rs->master ? rs->master->pname.len : 3),
+                        (rs->master ? (char*)rs->master->pname.data : "nil"),
+                        array_n(&rs->tagged_servers[0]),
+                        array_n(&rs->tagged_servers[1]),
+                        array_n(&rs->tagged_servers[2]),
+                        array_n(&rs->tagged_servers[3]),
+                        array_n(&rs->tagged_servers[4]));
+
+            for (j = 4; j >= 0; j--) {
+                count += array_n(&rs->tagged_servers[j]);
+                if (array_n(&rs->tagged_servers[j]) != 0) {
+                    for (k = 0; k < array_n(&rs->tagged_servers[j]); k++){
+                        struct server **s = array_get(&rs->tagged_servers[j], k);
+                        sprintf(&tagged_servers, "%2d:%-22s", j, (*s)->name.data);
+                        status = msg_prepend_format(response, "$%d\r\n%s\r\n", nc_strlen(tagged_servers), tagged_servers);
+                        if (status != NC_OK) {
+                            return status;
+                        }
+                    }
+                }
+            }
+            status = msg_prepend_format(response, "$%d\r\n%s\r\n", nc_strlen(res), res);
+            if (status != NC_OK) {
+                return status;
+            }
+        }
+    }
+    return msg_prepend_format(response, "*%d\r\n", count);
+}
+
 rstatus_t
-redis_reply(struct msg *r)
+redis_reply(struct context *ctx, struct msg *r)
 {
     struct conn *c_conn;
     struct msg *response = r->peer;
+    struct server_pool *pool = NULL;
+    unsigned pidx = 0;
+    struct keypos *keypos = NULL;
 
     ASSERT(response != NULL && response->owner != NULL);
 
@@ -2554,6 +2634,35 @@ redis_reply(struct msg *r)
         log_warn("req %"PRIu64" from c %d exceed limit. msg_length %"PRIu64"", r->id,
                  c_conn->sd, r->mlen);
         return msg_append(response, (uint8_t *)EMSG_REQ_TOO_LARGE, nc_strlen(EMSG_REQ_TOO_LARGE));
+    case MSG_REQ_REDIS_NODES:
+    case MSG_REQ_REDIS_NODE:
+        if (array_n(r->keys) == 0) {
+            pidx = 0;
+        } else {
+            keypos = array_get(r->keys, 0);
+            pidx = atoi(keypos->start);
+        }
+        if (pidx >= array_n(&ctx->pool)) {
+            return msg_append(response, (uint8_t *)NODES_INVALID, nc_strlen(NODES_INVALID));
+        } else {
+            pool = array_get(&ctx->pool, pidx);
+            return msg_append(response, (uint8_t *)(pool->probebuf), pool->nprobebuf);
+        }
+    case MSG_REQ_REDIS_SLOTS:
+    case MSG_REQ_REDIS_SLOT:
+        if (array_n(r->keys) == 0) {
+            pidx = 0;
+        } else {
+            keypos = array_get(r->keys, 0);
+            pidx = atoi(keypos->start);
+        }
+        if (pidx >= array_n(&ctx->pool)) {
+            return msg_append(response, (uint8_t *)NODES_INVALID, nc_strlen(NODES_INVALID));
+        } else {
+            pool = array_get(&ctx->pool, pidx);
+            return redis_reply_topo(pool, response);
+        }
+
     default:
         NOT_REACHED();
         return NC_ERROR;

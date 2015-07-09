@@ -1514,7 +1514,7 @@ memcache_add_auth_packet(struct context *ctx, struct conn *c_conn, struct conn *
 }
 
 rstatus_t
-memcache_reply(struct msg *r)
+memcache_reply(struct context *ctx, struct msg *r)
 {
     NOT_REACHED();
     return NC_OK;
