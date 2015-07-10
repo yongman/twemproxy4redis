@@ -1276,6 +1276,10 @@ conf_validate_pool(struct conf *cf, struct conf_pool *cp)
         cp->server_failure_limit = CONF_DEFAULT_SERVER_FAILURE_LIMIT;
     }
 
+    if (string_empty(&cp->hash_tag)) {
+        string_set_text(&cp->hash_tag, "{}")
+    }
+
     status = conf_validate_server(cf, cp);
     if (status != NC_OK) {
         return status;
