@@ -1288,6 +1288,10 @@ conf_validate_pool(struct conf *cf, struct conf_pool *cp)
         cp->msg_max_length_limit = CONF_DEFAULT_REDIS_MSG_LIMIT;
     }
 
+    if (string_empty(&cp->hash_tag)) {
+        string_set_text(&cp->hash_tag, "{}")
+    }
+
     status = conf_validate_server(cf, cp);
     if (status != NC_OK) {
         return status;
