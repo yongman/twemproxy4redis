@@ -114,6 +114,10 @@ static struct command conf_commands[] = {
       conf_set_string,
       offsetof(struct conf_pool, zone) },
 
+    { string("env"),
+      conf_set_string,
+      offsetof(struct conf_pool, env) },
+
     { string("servers"),
       conf_add_server,
       offsetof(struct conf_pool, server) },
@@ -218,6 +222,7 @@ conf_pool_init(struct conf_pool *cp, struct string *name)
     cp->server_retry_timeout = CONF_UNSET_NUM;
     cp->server_failure_limit = CONF_UNSET_NUM;
     cp->msg_max_length_limit = CONF_UNSET_NUM;
+    string_init(&cp->env);
 
     array_null(&cp->server);
 
@@ -247,6 +252,9 @@ conf_pool_deinit(struct conf_pool *cp)
 
     string_deinit(&cp->listen.pname);
     string_deinit(&cp->listen.name);
+    string_deinit(&cp->hash_tag);
+    string_deinit(&cp->zone);
+    string_deinit(&cp->env);
 
     if (cp->redis_auth.len > 0) {
         string_deinit(&cp->redis_auth);
@@ -318,6 +326,8 @@ conf_pool_each_transform(void *elem, void *data)
     sp->auto_eject_hosts = cp->auto_eject_hosts ? 1 : 0;
     sp->preconnect = cp->preconnect ? 1 : 0;
     sp->zone = cp->zone;
+    sp->env = cp->env;
+    log_warn("=======env:%s",sp->env.data);
 
     for (i = 0; i < REDIS_CLUSTER_SLOTS; i++) {
         sp->slots[i] = NULL;
@@ -374,7 +384,8 @@ conf_dump(struct conf *cf)
                   cp->server_failure_limit);
         log_debug(LOG_VVERB, "  msg_max_length_limit: %d",
                   cp->msg_max_length_limit);
-
+        log_debug(LOG_VVERB, "  zone: %s", cp->zone.data);
+        log_debug(LOG_VVERB, "  env: %s", cp->env.data);
         nserver = array_n(&cp->server);
         log_debug(LOG_VVERB, "  servers: %"PRIu32"", nserver);
 
@@ -1289,7 +1300,11 @@ conf_validate_pool(struct conf *cf, struct conf_pool *cp)
     }
 
     if (string_empty(&cp->hash_tag)) {
-        string_set_text(&cp->hash_tag, "{}")
+        string_set_text(&cp->hash_tag, "{}");
+    }
+
+    if (string_empty(&cp->env)) {
+        string_set_text(&cp->env, "online");
     }
 
     status = conf_validate_server(cf, cp);

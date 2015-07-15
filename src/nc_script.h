@@ -15,6 +15,7 @@ rstatus_t ffi_server_connect(struct server *server);
 rstatus_t ffi_server_disconnect(struct server *server);
 
 struct string ffi_pool_get_zone(struct server_pool *pool);
+struct string ffi_pool_get_env(struct server_pool *pool);
 void ffi_pool_clear_servers(struct server_pool *pool);
 void ffi_pool_add_server(struct server_pool *pool, struct server *server);
 void ffi_reset_stats(void);

@@ -27,13 +27,13 @@ function parse(lines)
              table.insert(node_lines,line)
          end
       end
-
-
    end
 
-   if #node_lines < 3 then
-       error("parse: not enough nodes")
-       return
+   if pool:is_online() then
+       if #node_lines < 3 then
+          error("parse: not enough nodes")
+          return
+       end
    end
 
    -- parse nodes

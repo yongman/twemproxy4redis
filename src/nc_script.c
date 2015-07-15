@@ -234,6 +234,11 @@ ffi_pool_get_zone(struct server_pool *pool) {
     return pool->zone;
 }
 
+struct string
+ffi_pool_get_env(struct server_pool *pool) {
+    return pool->env;
+}
+
 void
 ffi_pool_clear_servers(struct server_pool *pool) {
     pool->ffi_server.nelem = 0;

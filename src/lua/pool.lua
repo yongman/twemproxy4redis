@@ -9,6 +9,7 @@ ffi.cdef[[
 
       void ffi_pool_clear_servers(struct server_pool *pool);
       void ffi_pool_add_server(struct server_pool *pool, struct server *server);
+      struct string ffi_pool_get_env(struct server_pool *pool);
 
       void ffi_server_table_delete(struct server_pool *pool, const char *name);
 
@@ -20,6 +21,7 @@ ffi.cdef[[
 
 local server = require("server")
 local replica_set = require("replica_set")
+local run_env = C.ffi_pool_get_env(__pool)
 
 local _M = {
    server_map = {},
@@ -34,7 +36,13 @@ local _M = {
    -- resource pools
    _rs_pool = {},
    _se_pool = {},
+
+   _run_env = ffi.string(run_env.data, run_env.len),
 }
+
+function _M.is_online(self)
+   return self._run_env == "online"
+end
 
 function _M.fetch_server(self, config)
    local s = nil

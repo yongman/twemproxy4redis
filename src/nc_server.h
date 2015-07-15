@@ -143,6 +143,7 @@ struct server_pool {
     pool_tick_t        pool_tick;            /* ticker */
     int64_t            ticks_left;
     struct string      zone;                 /* avaliablity zone */
+    struct string      env;                  /* env type: online or offline. [default:online] */
     struct hash_table  *server_table;        /* address(ip:port) to server map */
     struct replicaset  *slots[REDIS_CLUSTER_SLOTS];
 
