@@ -327,7 +327,6 @@ conf_pool_each_transform(void *elem, void *data)
     sp->preconnect = cp->preconnect ? 1 : 0;
     sp->zone = cp->zone;
     sp->env = cp->env;
-    log_warn("=======env:%s",sp->env.data);
 
     for (i = 0; i < REDIS_CLUSTER_SLOTS; i++) {
         sp->slots[i] = NULL;

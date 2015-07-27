@@ -637,10 +637,6 @@ server_pool_hash(struct server_pool *pool, uint8_t *key, uint32_t keylen)
     ASSERT(array_n(&pool->server) != 0);
     ASSERT(key != NULL);
 
-    if (array_n(&pool->server) == 1) {
-        return 0;
-    }
-
     if (keylen == 0) {
         return 0;
     }

@@ -131,6 +131,7 @@ req_done(struct conn *conn, struct msg *msg)
     struct msg *cmsg, *pmsg; /* current and previous message */
     uint64_t id;             /* fragment id */
     uint32_t nfragment;      /* # fragment */
+    struct server_pool *sp;
 
     ASSERT(conn->client && !conn->proxy);
     ASSERT(msg->request);
@@ -141,6 +142,14 @@ req_done(struct conn *conn, struct msg *msg)
 
     id = msg->frag_id;
     if (id == 0) {
+        /*
+        * Handle msg length check for get/set ...
+        * this function will change the response msg to -ERR
+        */
+        if (msg->peer->size_check) {
+            sp = conn->owner;
+            msg->size_check(msg->peer, sp->msg_max_length_limit);
+        }
         return true;
     }
 
@@ -204,6 +213,15 @@ req_done(struct conn *conn, struct msg *msg)
 
     log_debug(LOG_DEBUG, "req from c %d with fid %"PRIu64" and %"PRIu32" "
               "fragments is done", conn->sd, id, nfragment);
+
+    /*
+    * Handle msg length check for mget
+    * this function will change the response msg to -ERR
+    */
+    if (msg->frag_owner->peer->size_check) {
+        sp = conn->owner;
+        msg->size_check(msg->frag_owner->peer, sp->msg_max_length_limit);
+    }
 
     return true;
 }
