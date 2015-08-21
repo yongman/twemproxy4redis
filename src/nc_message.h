@@ -176,10 +176,10 @@ typedef enum msg_parse_result {
     ACTION( RSP_REDIS_MULTIBULK )                                                                   \
     ACTION( RSP_REDIS_ASK )                                                                         \
     ACTION( RSP_REDIS_MOVED )                                                                       \
-    ACTION( REQ_REDIS_NODES )                                                                             \
-    ACTION( REQ_REDIS_NODE ) \
-    ACTION( REQ_REDIS_SLOTS ) \
-    ACTION( REQ_REDIS_SLOT ) \
+    ACTION( REQ_REDIS_NODES )                                                                       \
+    ACTION( REQ_REDIS_NODE )                                                                        \
+    ACTION( REQ_REDIS_SLOTS )                                                                       \
+    ACTION( REQ_REDIS_SLOT )                                                                        \
     ACTION( SENTINEL )                                                                              \
 
 

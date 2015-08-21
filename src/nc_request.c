@@ -146,7 +146,7 @@ req_done(struct conn *conn, struct msg *msg)
         * Handle msg length check for get/set ...
         * this function will change the response msg to -ERR
         */
-        if (msg->peer->size_check) {
+        if (msg->peer && msg->peer->size_check) {
             sp = conn->owner;
             msg->size_check(msg->peer, sp->msg_max_length_limit);
         }
@@ -551,6 +551,13 @@ req_forward_error(struct context *ctx, struct conn *conn, struct msg *msg)
     msg->done = 1;
     msg->error = 1;
     msg->err = errno;
+
+    /* if this is a submsg, mark the owner msg */
+    if (msg->frag_owner && !msg->frag_owner->error) {
+        msg->frag_owner->done = 1;
+        msg->frag_owner->fdone = 1;
+        msg->frag_owner->error = 1;
+    }
 
     /* noreply request don't expect any response */
     if (msg->noreply) {
