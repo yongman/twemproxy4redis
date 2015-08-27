@@ -2292,7 +2292,7 @@ redis_pre_coalesce(struct msg *r)
         /*
          * Muti-bulk reply can span over multiple mbufs and in each reply
          * we should skip over the narg token. Our response parser
-         * guarantees thaat the narg token and the immediately following
+         * guarantees that the narg token and the immediately following
          * '\r\n' will exist in a contiguous region in the first mbuf
          */
         ASSERT(r->narg_start == mbuf->pos);
@@ -2657,7 +2657,7 @@ redis_reply(struct context *ctx, struct msg *r)
             pidx = atoi(keypos->start);
         }
         if (pidx >= array_n(&ctx->pool)) {
-            return msg_append(response, (uint8_t *)NODES_INVALID, nc_strlen(NODES_INVALID));
+            return msg_append(response, (uint8_t *)SLOTS_INVALID, nc_strlen(SLOTS_INVALID));
         } else {
             pool = array_get(&ctx->pool, pidx);
             return redis_reply_topo(pool, response);
@@ -3081,6 +3081,7 @@ redis_pre_rsp_forward(struct context *ctx, struct conn * s_conn, struct msg *msg
 
             status = req_enqueue(pool->ctx, s_conn, NULL, ask_msg);
             if (status != NC_OK) {
+				msg_put(ask_msg);
                 goto ferror;
             }
         }
