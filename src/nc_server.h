@@ -98,7 +98,7 @@ struct replicaset {
     struct array tagged_servers[NC_MAXTAGNUM];
 };
 
-#define REDIS_PROBE_BUF_SIZE 16384*2
+#define REDIS_PROBE_BUF_SIZE 16384*10
 struct server_pool {
     uint32_t           idx;                  /* pool index */
     struct context     *ctx;                 /* owner context */
