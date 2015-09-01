@@ -553,9 +553,8 @@ req_forward_error(struct context *ctx, struct conn *conn, struct msg *msg)
     msg->err = errno;
 
     /* if this is a submsg, mark the owner msg */
-    if (msg->frag_owner && !msg->frag_owner->error) {
-        msg->frag_owner->done = 1;
-        msg->frag_owner->fdone = 1;
+    if (msg->frag_owner) {
+        msg->frag_owner->nfrag_done++;
         msg->frag_owner->error = 1;
     }
 
