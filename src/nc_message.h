@@ -60,17 +60,19 @@ typedef enum msg_parse_result {
     ACTION( RSP_MC_DELETED )                   /* memcache delete response */                       \
     ACTION( RSP_MC_ERROR )                     /* memcache error responses */                       \
     ACTION( RSP_MC_CLIENT_ERROR )                                                                   \
-    ACTION( RSP_MC_SERVER_ERROR )                                                                   \
-    ACTION( REQ_REDIS_EXISTS )                                                                      \
+    ACTION( RSP_MC_SERVER_ERROR )              /* redis read commands below */                      \
+    ACTION( REQ_REDIS_EXISTS )                 /* redis commands - keys */                          \
     ACTION( REQ_REDIS_TTL )                                                                         \
+    ACTION( REQ_REDIS_PTTL )                                                                        \
     ACTION( REQ_REDIS_TYPE )                                                                        \
-    ACTION( REQ_REDIS_BITCOUNT )                                                                    \
+    ACTION( REQ_REDIS_DUMP )                                                                        \
+    ACTION( REQ_REDIS_BITCOUNT )               /* redis requests - string */                        \
     ACTION( REQ_REDIS_GET )                                                                         \
     ACTION( REQ_REDIS_GETBIT )                                                                      \
     ACTION( REQ_REDIS_GETRANGE )                                                                    \
     ACTION( REQ_REDIS_MGET )                                                                        \
     ACTION( REQ_REDIS_STRLEN )                                                                      \
-    ACTION( REQ_REDIS_HEXISTS )                                                                     \
+    ACTION( REQ_REDIS_HEXISTS )                /* redis requests - hash */                          \
     ACTION( REQ_REDIS_HGET )                                                                        \
     ACTION( REQ_REDIS_HGETALL )                                                                     \
     ACTION( REQ_REDIS_HKEYS )                                                                       \
@@ -81,10 +83,14 @@ typedef enum msg_parse_result {
     ACTION( REQ_REDIS_LINDEX )                 /* redis requests - lists */                         \
     ACTION( REQ_REDIS_LLEN )                                                                        \
     ACTION( REQ_REDIS_LRANGE )                                                                      \
-    ACTION( REQ_REDIS_SRANDMEMBER )                                                                 \
-    ACTION( REQ_REDIS_PFMERGE )                                                                     \
+    ACTION( REQ_REDIS_SRANDMEMBER )            /* redis requests - set */                           \
     ACTION( REQ_REDIS_SSCAN)                                                                        \
-    ACTION( REQ_REDIS_ZCARD )                                                                       \
+    ACTION( REQ_REDIS_SDIFF )                                                                       \
+    ACTION( REQ_REDIS_SINTER )                                                                      \
+    ACTION( REQ_REDIS_SCARD )                                                                       \
+    ACTION( REQ_REDIS_SISMEMBER )                                                                   \
+    ACTION( REQ_REDIS_SMEMBERS )                                                                    \
+    ACTION( REQ_REDIS_ZCARD )                  /* redis requests - sorted set */                    \
     ACTION( REQ_REDIS_ZCOUNT )                                                                      \
     ACTION( REQ_REDIS_ZLEXCOUNT )                                                                   \
     ACTION( REQ_REDIS_ZRANGE )                                                                      \
@@ -95,14 +101,7 @@ typedef enum msg_parse_result {
     ACTION( REQ_REDIS_ZREVRANGEBYSCORE )                                                            \
     ACTION( REQ_REDIS_ZREVRANK )                                                                    \
     ACTION( REQ_REDIS_ZSCORE )                                                                      \
-    ACTION( REQ_REDIS_ZUNIONSTORE )                                                                 \
     ACTION( REQ_REDIS_ZSCAN)                                                                        \
-    ACTION( REQ_REDIS_PTTL )                                                                        \
-    ACTION( REQ_REDIS_SDIFF )                                                                       \
-    ACTION( REQ_REDIS_SINTER )                                                                      \
-    ACTION( REQ_REDIS_SCARD )                                                                       \
-    ACTION( REQ_REDIS_SISMEMBER )                                                                   \
-    ACTION( REQ_REDIS_SMEMBERS )                                                                    \
     ACTION( REQ_REDIS_WRITECMD_START )         /* redis write commands below */                     \
     ACTION( REQ_REDIS_DEL )                    /* redis commands - keys */                          \
     ACTION( REQ_REDIS_EXPIRE )                                                                      \
@@ -114,7 +113,6 @@ typedef enum msg_parse_result {
     ACTION( REQ_REDIS_APPEND )                 /* redis requests - string */                        \
     ACTION( REQ_REDIS_DECR )                                                                        \
     ACTION( REQ_REDIS_DECRBY )                                                                      \
-    ACTION( REQ_REDIS_DUMP )                                                                        \
     ACTION( REQ_REDIS_GETSET )                                                                      \
     ACTION( REQ_REDIS_INCR )                                                                        \
     ACTION( REQ_REDIS_INCRBY )                                                                      \
@@ -127,32 +125,33 @@ typedef enum msg_parse_result {
     ACTION( REQ_REDIS_SETEX )                                                                       \
     ACTION( REQ_REDIS_SETNX )                                                                       \
     ACTION( REQ_REDIS_SETRANGE )                                                                    \
+    ACTION( REQ_REDIS_SUNION )                                                                      \
     ACTION( REQ_REDIS_HDEL )                   /* redis requests - hashes */                        \
     ACTION( REQ_REDIS_HINCRBY )                                                                     \
     ACTION( REQ_REDIS_HINCRBYFLOAT )                                                                \
     ACTION( REQ_REDIS_HMSET )                                                                       \
     ACTION( REQ_REDIS_HSET )                                                                        \
     ACTION( REQ_REDIS_HSETNX )                                                                      \
-    ACTION( REQ_REDIS_LINSERT )                                                                     \
+    ACTION( REQ_REDIS_LINSERT )                /* redis requests - list */                          \
     ACTION( REQ_REDIS_LPOP )                                                                        \
     ACTION( REQ_REDIS_LPUSH )                                                                       \
     ACTION( REQ_REDIS_LPUSHX )                                                                      \
     ACTION( REQ_REDIS_LREM )                                                                        \
     ACTION( REQ_REDIS_LSET )                                                                        \
     ACTION( REQ_REDIS_LTRIM )                                                                       \
-    ACTION( REQ_REDIS_PFADD )                  /* redis requests - hyperloglog */                   \
-    ACTION( REQ_REDIS_PFCOUNT )                                                                     \
     ACTION( REQ_REDIS_RPOP )                                                                        \
     ACTION( REQ_REDIS_RPOPLPUSH )                                                                   \
     ACTION( REQ_REDIS_RPUSH )                                                                       \
     ACTION( REQ_REDIS_RPUSHX )                                                                      \
+    ACTION( REQ_REDIS_PFADD )                  /* redis requests - hyperloglog */                   \
+    ACTION( REQ_REDIS_PFCOUNT )                                                                     \
+    ACTION( REQ_REDIS_PFMERGE )                                                                     \
     ACTION( REQ_REDIS_SADD )                   /* redis requests - sets */                          \
     ACTION( REQ_REDIS_SDIFFSTORE )                                                                  \
     ACTION( REQ_REDIS_SINTERSTORE )                                                                 \
     ACTION( REQ_REDIS_SMOVE )                                                                       \
     ACTION( REQ_REDIS_SPOP )                                                                        \
     ACTION( REQ_REDIS_SREM )                                                                        \
-    ACTION( REQ_REDIS_SUNION )                                                                      \
     ACTION( REQ_REDIS_SUNIONSTORE )                                                                 \
     ACTION( REQ_REDIS_ZADD )                   /* redis requests - sorted sets */                   \
     ACTION( REQ_REDIS_ZINCRBY )                                                                     \
@@ -161,6 +160,7 @@ typedef enum msg_parse_result {
     ACTION( REQ_REDIS_ZREMRANGEBYRANK )                                                             \
     ACTION( REQ_REDIS_ZREMRANGEBYLEX )                                                              \
     ACTION( REQ_REDIS_ZREMRANGEBYSCORE )                                                            \
+    ACTION( REQ_REDIS_ZUNIONSTORE )                                                                 \
     ACTION( REQ_REDIS_EVAL )                   /* redis requests - eval */                          \
     ACTION( REQ_REDIS_EVALSHA )                                                                     \
     ACTION( REQ_REDIS_PING )                   /* redis requests - ping/quit */                     \
