@@ -2615,6 +2615,7 @@ redis_reply(struct context *ctx, struct msg *r)
     struct server_pool *pool = NULL;
     unsigned pidx = 0;
     struct keypos *keypos = NULL;
+    size_t nprobebuf;
 
     ASSERT(response != NULL && response->owner != NULL);
 
@@ -2646,7 +2647,15 @@ redis_reply(struct context *ctx, struct msg *r)
             return msg_append(response, (uint8_t *)NODES_INVALID, nc_strlen(NODES_INVALID));
         } else {
             pool = array_get(&ctx->pool, pidx);
-            return msg_append(response, (uint8_t *)(pool->probebuf), pool->nprobebuf);
+            nprobebuf = pool->nprobebuf;
+            while(msg_append(response, (uint8_t *)(pool->probebuf + pool->nprobebuf - nprobebuf),
+                           nprobebuf > mbuf_data_size() ? mbuf_data_size() : nprobebuf)) {
+                nprobebuf -= mbuf_data_size();
+                if (nprobebuf <= 0) {
+                    break;
+                }
+            }
+            return NC_OK;
         }
     case MSG_REQ_REDIS_SLOTS:
     case MSG_REQ_REDIS_SLOT:
@@ -3259,6 +3268,10 @@ redis_pool_tick(struct server_pool *pool)
         if (pool->slots[idx] == NULL) {
             int s_cnt = array_n(&pool->server);
             int s_idx = s_cnt == 0 ? 0 : random() % array_n(&pool->server);
+            if (s_cnt == 0) {
+                log_warn("pool has no server found.");
+                return;
+            }
             server = *(struct server**)array_get(&pool->server, s_idx);
             if (server) {
                 log_debug(LOG_VERB, "slot[%d] is nil, request server :%d", idx, server->port);
@@ -3330,7 +3343,6 @@ redis_pool_tick(struct server_pool *pool)
 
         /* update servers */
         if (array_n(&pool->ffi_server) == 0) {
-            pool->ffi_server_update = 0;
             return;
         }
         log_debug(LOG_VVVERB, "lua get %d servers", array_n(&pool->ffi_server));

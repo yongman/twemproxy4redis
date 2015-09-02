@@ -111,8 +111,8 @@ function update_cluster_nodes(msg)
       error("update_cluster_nodes: nodes info invalid")
       return
    end
-   if bytes > 16384 then
-      error("update_cluster_nodes: nodes info too large > 16384 (FIXME)")
+   if bytes > 163840 then
+      error("update_cluster_nodes: nodes info too large > 163840 (FIXME)")
       return
    end
    table.remove(lines, 1)
