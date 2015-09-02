@@ -3108,20 +3108,33 @@ ferror:
 
     /* probe msg */
     if (c_conn == NULL) {
-        struct mbuf *mbuf;
+        struct mbuf *mbuf, *nbuf; /* current and next mbuf */
+        size_t total_mlen, mlen;  /*  total mbuf length and one sub mbuf length */
 
-        /* FIXME: check length */
-        mbuf = STAILQ_FIRST(&msg->mhdr);
-
-        pool->nprobebuf = mbuf->last - mbuf->start;
-        /* FIXME: buffer length */
-        if (pool->nprobebuf > REDIS_PROBE_BUF_SIZE) {
-            req_put(pmsg);
-            return NC_ERROR;
-        }
         if (pool->probebuf_busy == 0) {
             pool->probebuf_busy = 1;
-            memcpy(pool->probebuf, mbuf->start, pool->nprobebuf);
+            total_mlen = 0;
+
+            for (mbuf = STAILQ_FIRST(&msg->mhdr); mbuf != NULL; mbuf = nbuf) {
+                nbuf = STAILQ_NEXT(mbuf, next);
+
+                if (mbuf_empty(mbuf)) {
+                    continue;
+                }
+
+                mlen = mbuf_length(mbuf);
+
+                if (total_mlen + mlen > REDIS_PROBE_BUF_SIZE) {
+                    req_put(pmsg);
+                    log_warn("cluster nodes msg large than %d", REDIS_PROBE_BUF_SIZE);
+                    return NC_ERROR;
+                }
+                /* copy the mbuf data to pool->probebuf */
+                memcpy(pool->probebuf + total_mlen, mbuf->pos, mlen);
+
+                total_mlen += mlen;
+            }
+            pool->nprobebuf = total_mlen;
         } else {
             log_debug(LOG_VERB, "probe buffer is busy, ignore this probe message");
         }
