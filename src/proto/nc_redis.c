@@ -2615,7 +2615,7 @@ redis_reply(struct context *ctx, struct msg *r)
     struct server_pool *pool = NULL;
     unsigned pidx = 0;
     struct keypos *keypos = NULL;
-    size_t nprobebuf;
+    int nprobebuf;
 
     ASSERT(response != NULL && response->owner != NULL);
 
@@ -2648,7 +2648,7 @@ redis_reply(struct context *ctx, struct msg *r)
         } else {
             pool = array_get(&ctx->pool, pidx);
             nprobebuf = pool->nprobebuf;
-            while(msg_append(response, (uint8_t *)(pool->probebuf + pool->nprobebuf - nprobebuf),
+            while(!msg_append(response, (uint8_t *)(pool->probebuf + pool->nprobebuf - nprobebuf),
                            nprobebuf > mbuf_data_size() ? mbuf_data_size() : nprobebuf)) {
                 nprobebuf -= mbuf_data_size();
                 if (nprobebuf <= 0) {
