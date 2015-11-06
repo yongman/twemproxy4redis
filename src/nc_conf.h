@@ -55,6 +55,7 @@
 #define CONF_DEFAULT_SERVER_CONNECTIONS      1
 #define CONF_DEFAULT_KETAMA_PORT             11211
 #define CONF_DEFAULT_REDIS_MSG_LIMIT         64 * 1024
+#define CONF_DEFAULT_WHITELIST_INTERVAL      10
 
 struct conf_listen {
     struct string   pname;   /* listen: as "name:port" */
@@ -95,6 +96,8 @@ struct conf_pool {
     int                msg_max_length_limit;  /* msg max length limit */
     struct string      zone;                  /* avaliablity zone */
     struct string      env;                   /* env type of the pool. online or offline [default:online] */
+    struct string      whitelist;
+    int                whitelist_interval;
     struct array       server;                /* servers: conf_server[] */
     unsigned           valid:1;               /* valid? */
 };

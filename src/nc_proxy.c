@@ -15,6 +15,7 @@
  * limitations under the License.
  */
 
+#include <arpa/inet.h>
 #include <sys/stat.h>
 #include <sys/un.h>
 
@@ -274,13 +275,15 @@ proxy_accept(struct context *ctx, struct conn *p)
     rstatus_t status;
     struct conn *c;
     int sd;
+    struct sockaddr addr;
+    socklen_t len = sizeof(addr);
 
     ASSERT(p->proxy && !p->client);
     ASSERT(p->sd > 0);
     ASSERT(p->recv_active && p->recv_ready);
 
     for (;;) {
-        sd = accept(p->sd, NULL, NULL);
+        sd = accept(p->sd, &addr, &len);
         if (sd < 0) {
             if (errno == EINTR) {
                 log_debug(LOG_VERB, "accept on p %d not ready - eintr", p->sd);
@@ -331,6 +334,15 @@ proxy_accept(struct context *ctx, struct conn *p)
         status = close(sd);
         if (status < 0) {
             log_error("close c %d failed, ignored: %s", sd, strerror(errno));
+        }
+        return NC_OK;
+    }
+
+    if (in_whitelist(((struct sockaddr_in*)&addr)->sin_addr) == 0) {
+        log_warn("Unauthorized access from %s", inet_ntoa(((struct sockaddr_in*)&addr)->sin_addr));
+        status = close(sd);
+        if (status < 0) {
+            log_error("close c %d failed, ignore: %s", sd, strerror(errno));
         }
         return NC_OK;
     }

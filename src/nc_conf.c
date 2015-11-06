@@ -118,6 +118,14 @@ static struct command conf_commands[] = {
       conf_set_string,
       offsetof(struct conf_pool, env) },
 
+    { string("whitelist"),
+      conf_set_string,
+      offsetof(struct conf_pool, whitelist) },
+
+    { string("whitelist_interval"),
+      conf_set_num,
+      offsetof(struct conf_pool, whitelist_interval) },
+
     { string("servers"),
       conf_add_server,
       offsetof(struct conf_pool, server) },
@@ -223,6 +231,8 @@ conf_pool_init(struct conf_pool *cp, struct string *name)
     cp->server_failure_limit = CONF_UNSET_NUM;
     cp->msg_max_length_limit = CONF_UNSET_NUM;
     string_init(&cp->env);
+    string_init(&cp->whitelist);
+    cp->whitelist_interval = CONF_UNSET_NUM;
 
     array_null(&cp->server);
 
@@ -255,6 +265,7 @@ conf_pool_deinit(struct conf_pool *cp)
     string_deinit(&cp->hash_tag);
     string_deinit(&cp->zone);
     string_deinit(&cp->env);
+    string_deinit(&cp->whitelist);
 
     if (cp->redis_auth.len > 0) {
         string_deinit(&cp->redis_auth);
@@ -384,6 +395,9 @@ conf_dump(struct conf *cf)
         log_debug(LOG_VVERB, "  msg_max_length_limit: %d",
                   cp->msg_max_length_limit);
         log_debug(LOG_VVERB, "  zone: %s", cp->zone.data);
+        log_debug(LOG_VVERB, "  whitelist: %s", cp->whitelist.data);
+        log_debug(LOG_VVERB, "  whitelist_interval: %d",
+                  cp->whitelist_interval);
         log_debug(LOG_VVERB, "  env: %s", cp->env.data);
         nserver = array_n(&cp->server);
         log_debug(LOG_VVERB, "  servers: %"PRIu32"", nserver);
@@ -1296,6 +1310,14 @@ conf_validate_pool(struct conf *cf, struct conf_pool *cp)
 
     if (cp->msg_max_length_limit == CONF_UNSET_NUM) {
         cp->msg_max_length_limit = CONF_DEFAULT_REDIS_MSG_LIMIT;
+    }
+
+    if (cp->whitelist_interval == CONF_UNSET_NUM) {
+        cp->whitelist_interval = CONF_DEFAULT_WHITELIST_INTERVAL;
+    }
+
+    if (string_empty(&cp->whitelist)) {
+        string_set_text(&cp->whitelist, "conf/authip");
     }
 
     if (string_empty(&cp->hash_tag)) {

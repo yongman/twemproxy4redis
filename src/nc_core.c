@@ -21,6 +21,7 @@
 #include <nc_conf.h>
 #include <nc_server.h>
 #include <nc_proxy.h>
+#include <nc_ipwhitelist.h>
 
 static uint32_t ctx_id; /* context generation */
 
@@ -51,6 +52,8 @@ core_ctx_create(struct instance *nci)
     rstatus_t status;
     struct context *ctx;
     int64_t now;
+    uint32_t npool;
+    struct conf_pool *cp;
 
     ctx = nc_alloc(sizeof(*ctx));
     if (ctx == NULL) {
@@ -148,6 +151,16 @@ core_ctx_create(struct instance *nci)
     }
 
     log_debug(LOG_VVERB, "created ctx %p id %"PRIu32"", ctx, ctx->id);
+
+    /* initialize whitelist thread */
+    npool = array_n(&ctx->cf->pool);
+    if (npool > 0) {
+        cp = array_get(&ctx->cf->pool, 0);
+        log_warn("whitelist:%s interval:%d", cp->whitelist.data, cp->whitelist_interval);
+        if (whitelist_init((char *)cp->whitelist.data, cp->whitelist_interval)) {
+            return NULL;
+        }
+    }
 
     return ctx;
 }
