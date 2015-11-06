@@ -1,4 +1,5 @@
 #include <nc_core.h>
+#include <nc_hashkit.h>
 
 #define HASHSIZE(_n) (1 << (_n))
 #define HASHMASK(_n) (HASHSIZE(_n) - 1)
@@ -21,8 +22,10 @@ assoc_create_item(const char *key, size_t nkey, void *data)
     if (it == NULL) {
         return NULL;
     }
-    
-    it->key.data = (uint8_t*)key;
+    it->key.data = nc_alloc(nkey + 1);
+    memset(it->key.data, 0, nkey + 1);
+    nc_memcpy(it->key.data, key, nkey);
+
     it->key.len = (uint32_t)nkey;
     it->data = data;
 
@@ -33,7 +36,7 @@ static void
 assoc_destroy_item(struct item *it)
 {
     ASSERT(it != NULL);
-
+    nc_free(it->key.data);
     nc_free(it);
 }
 
@@ -70,6 +73,11 @@ assoc_create_table(hash_func_t hash, uint32_t sz)
     table->hash = hash;
 
     return table;
+}
+
+struct hash_table *
+assoc_create_table_default(void){
+    return assoc_create_table(hash_murmur, 10000);
 }
 
 void

@@ -15,6 +15,7 @@ struct hash_table {
 };
 
 struct hash_table * assoc_create_table(hash_func_t hash, uint32_t sz);
+struct hash_table * assoc_create_table_default(void);
 void assoc_destroy_table(struct hash_table *table);
 
 void* assoc_find(struct hash_table *table, const char *key, size_t nkey);
