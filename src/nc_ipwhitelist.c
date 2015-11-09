@@ -55,17 +55,17 @@ whitelist_t* load_whitelist(void) {
     }
     w->ht = assoc_create_table_default();
     if (w->ht == NULL) {
+        nc_free(w);
         log_warn("hashset create failed");
         return NULL;
     }
 
     while(fgets(buf, sizeof(buf), f) != NULL) {
-        lineno ++;
         line = buf;
         //trim leading whitespace
         while (*line == ' ' || *line == '\t') line++;
         //skip empty line or comments
-        if (buf[0] == '#' || buf[0] == '\r' || buf[0] == '\n' || buf[0] == 0) continue;
+        if (line[0] == '#' || line[0] == '\r' || line[0] == '\n' || buf[0] == 0) continue;
         end = line;
         //trim trailing characters
         while ((*end >= '0' && *end <= '9') || *end == '.') end++;
@@ -73,6 +73,7 @@ whitelist_t* load_whitelist(void) {
 
         //add to ht
         if (assoc_set(w->ht, line, strlen(line), (void *)1) != NC_OK) {
+            free_whitelist(w);
             return NULL;
         }
         log_debug(LOG_DEBUG, "whitelist added for %s", line);
@@ -83,8 +84,7 @@ whitelist_t* load_whitelist(void) {
 }
 
 int is_whitelist_changed(void) {
-    if (whitelist == NULL) return 0;
-    if (get_mtime(whitelist_file) > whitelist->mtime) {
+    if (whitelist == NULL || get_mtime(whitelist_file) > whitelist->mtime) {
         return 1;
     }
     return 0;
@@ -112,8 +112,12 @@ void *whitelist_loop() {
     log_debug(LOG_DEBUG, "whitelist_loop_started");
     for(;;) {
         if (is_whitelist_changed()) {
-            log_warn("whitelist changed detected");
             whitelist_t *w = load_whitelist();
+            if (w == NULL) {
+                /* may be whitelist file not exist */
+                continue;
+            }
+
             whitelist_t *tmp = whitelist;
             whitelist = w;
 
