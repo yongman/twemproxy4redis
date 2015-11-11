@@ -39,7 +39,6 @@ whitelist_t* load_whitelist(void) {
     long mtime;
     mtime = get_mtime(whitelist_file);
     if (mtime < 0) {
-        log_warn("Get mtime of whitelist file failed, possibly file does not exist");
         return NULL;
     }
     f = fopen(whitelist_file, "r");
@@ -84,7 +83,15 @@ whitelist_t* load_whitelist(void) {
 }
 
 int is_whitelist_changed(void) {
-    if (whitelist == NULL || get_mtime(whitelist_file) > whitelist->mtime) {
+    long mtime = get_mtime(whitelist_file);
+    static int flag = 0;
+    if (mtime < 0 && flag == 0) {
+        log_warn("Get mtime of whitelist file failed, possibly file does not exist");
+        flag = 1;
+    } else {
+        flag = 0;
+    }
+    if (whitelist == NULL || mtime < 0 || mtime > whitelist->mtime) {
         return 1;
     }
     return 0;
@@ -111,10 +118,14 @@ int in_whitelist(struct in_addr in) {
 void *whitelist_loop() {
     log_debug(LOG_DEBUG, "whitelist_loop_started");
     for(;;) {
+
+        sleep((unsigned)check_interval);
+
         if (is_whitelist_changed()) {
             whitelist_t *w = load_whitelist();
             if (w == NULL) {
                 /* may be whitelist file not exist */
+                whitelist = NULL;
                 continue;
             }
 
@@ -125,7 +136,6 @@ void *whitelist_loop() {
             sleep((unsigned)check_interval);
             free_whitelist(tmp);
         }
-        sleep((unsigned)check_interval);
     }
     return NULL;
 }
