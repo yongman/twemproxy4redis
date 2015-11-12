@@ -57,17 +57,20 @@ whitelist_t* load_whitelist(void) {
         log_warn("hashset create failed");
         return NULL;
     }
+    w->mtime = mtime;
 
     while(fgets(buf, sizeof(buf), f) != NULL) {
         line = buf;
         //trim leading whitespace
         while (*line == ' ' || *line == '\t') line++;
         //skip empty line or comments
-        if (line[0] == '#' || line[0] == '\r' || line[0] == '\n' || buf[0] == 0) continue;
+        if (line[0] == '#' || line[0] == '\r' || line[0] == '\n' || line[0] == 0) continue;
         end = line;
         //trim trailing characters
         while ((*end >= '0' && *end <= '9') || *end == '.') end++;
         *end = 0;
+
+        if (strlen(line) == 0) continue;
 
         //add to ht
         if (assoc_set(w->ht, line, strlen(line), (void *)1) != NC_OK) {
@@ -75,7 +78,6 @@ whitelist_t* load_whitelist(void) {
             return NULL;
         }
         log_debug(LOG_DEBUG, "whitelist added for %s", line);
-        w->mtime = mtime;
     }
     fclose(f);
     return w;
@@ -134,8 +136,8 @@ void *whitelist_loop() {
     for(;;) {
 
         sleep((unsigned)check_interval);
-
         if (is_whitelist_changed()) {
+            log_warn("whitelist changed");
             whitelist_t *w = load_whitelist();
             whitelist_t *tmp = whitelist;
             whitelist = w;
