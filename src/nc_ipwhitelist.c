@@ -35,7 +35,6 @@ whitelist_t* load_whitelist(void) {
     char buf[128];
     char *line;
     char *end;
-    int lineno;
     long mtime;
     mtime = get_mtime(whitelist_file);
     if (mtime < 0) {
@@ -46,7 +45,7 @@ whitelist_t* load_whitelist(void) {
         log_warn("Open whitelist file %s error, errmsg: %s", whitelist_file, strerror(errno));
         return NULL;
     }
-    lineno = 0;
+
     whitelist_t *w = (whitelist_t*) nc_alloc(sizeof(whitelist_t));
     if (w == NULL) {
         log_warn("malloc failed");
@@ -88,10 +87,25 @@ int is_whitelist_changed(void) {
     if (mtime < 0 && flag == 0) {
         log_warn("Get mtime of whitelist file failed, possibly file does not exist");
         flag = 1;
-    } else {
+    } else if (mtime > 0) {
         flag = 0;
     }
-    if (whitelist == NULL || mtime < 0 || mtime > whitelist->mtime) {
+
+    /* none -> none: do not need reload */
+    if (whitelist == NULL && mtime < 0) {
+        return 0;
+    }
+    /* none -> have: need check */
+    if (whitelist == NULL && mtime > 0) {
+        return 1;
+    }
+    /* have -> none: need check */
+    if (whitelist != NULL && mtime < 0) {
+        return 1;
+    }
+
+    /* have -> have: need check */
+    if (whitelist != NULL && mtime > whitelist->mtime) {
         return 1;
     }
     return 0;
@@ -123,12 +137,6 @@ void *whitelist_loop() {
 
         if (is_whitelist_changed()) {
             whitelist_t *w = load_whitelist();
-            if (w == NULL) {
-                /* may be whitelist file not exist */
-                whitelist = NULL;
-                continue;
-            }
-
             whitelist_t *tmp = whitelist;
             whitelist = w;
 
