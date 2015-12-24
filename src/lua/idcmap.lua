@@ -16,13 +16,13 @@ primary_preferred = {
 }
 
 nearest = {
-   tc = {"tc","jx",{"nj","nj03","hz","sh"},"gzhxy"},
-   jx = {"jx","tc",{"nj","nj03","hz","sh"},"gzhxy"},
-   nj = {"nj",{"nj03","hz","sh"},{"tc","jx"},"gzhxy"},
-   nj03 = {"nj03",{"nj","hz","sh"},{"tc","jx"},"gzhxy"},
-   hz = {"hz",{"nj","nj03","sh"},{"tc","jx"},"gzhxy"},
-   sh = {"sh",{"nj","nj03","hz"},"gzhxy",{"tc","jx"}},
-   gzhxy = {"gzhxy", {"nj","nj03","hz"},"sh",{"tc","jx"}}
+   tc = {"tc","jx",{"nj","nj03","hz","sh"},"gz"},
+   jx = {"jx","tc",{"nj","nj03","hz","sh"},"gz"},
+   nj = {"nj",{"nj03","hz","sh"},{"tc","jx"},"gz"},
+   nj03 = {"nj03",{"nj","hz","sh"},{"tc","jx"},"gz"},
+   hz = {"hz",{"nj","nj03","sh"},{"tc","jx"},"gz"},
+   sh = {"sh",{"nj","nj03","hz"},"gz",{"tc","jx"}},
+   gz = {"gz", {"nj","nj03","hz"},"sh",{"tc","jx"}}
 }
 
 return nearest
