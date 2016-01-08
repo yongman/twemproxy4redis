@@ -16,6 +16,7 @@ ffi.cdef[[
       rstatus_t ffi_server_disconnect(struct server *server);
       struct server* ffi_server_new(
          struct server_pool *pool, const char *name, const char *id, const char *ip, int port);
+      void ffi_server_update_addr(struct server *p, const char *name, const char *ip, int port);
 ]]
 
 local zone = C.ffi_pool_get_zone(__pool)
@@ -63,6 +64,8 @@ function _M.update_config(self, config)
    self.room = config.room
    self.ranges = config.ranges
    self.addr = string.format("%s:%d", self.ip, self.port)
+   -- update s.raw address --
+   C.ffi_server_update_addr(self.raw, self.addr, self.ip, self.port)
 
    if self.role == "master" and _M.zone_index["$master"] then
       self.tag_idx = _M.zone_index["$master"]

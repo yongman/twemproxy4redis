@@ -163,6 +163,50 @@ ffi_server_new(struct server_pool *pool, char *name, char *id, char *ip, int por
     return s;
 }
 
+void
+ffi_server_update_addr(struct server *s, char *name, char *ip, int port)
+{
+    struct string address;
+    rstatus_t status;
+
+    if (s == NULL) {
+        log_error("server is null");
+        return;
+    }
+
+    s->idx = 0;
+    s->weight = 1;
+    /* set name */
+    string_deinit(&s->name);
+    string_init(&s->name);
+    string_copy(&s->name, (uint8_t*)name, (uint32_t)nc_strlen(name));
+    string_deinit(&s->pname);
+    string_init(&s->pname);
+    string_copy(&s->pname, (uint8_t*)name, (uint32_t)nc_strlen(name));
+    string_init(&address);
+    string_copy(&address, (uint8_t*)ip, (uint32_t)nc_strlen(ip));
+    /* set port */
+    s->port = (uint16_t)port;
+
+    status = nc_resolve(&address, s->port, &s->sockinfo);
+    if (status != NC_OK) {
+        log_error("conf: failed to resolve %.*s:%d", address.len, address.data, s->port);
+        return;
+    }
+
+    s->family = s->sockinfo.family;
+    s->addrlen = s->sockinfo.addrlen;
+    s->addr = (struct sockaddr *)&s->sockinfo.addr;
+
+    s->ns_conn_q = 0;
+    TAILQ_INIT(&s->s_conn_q);
+
+    s->next_retry = 0LL;
+    s->failure_count = 0;
+
+    string_deinit(&address);
+}
+
 rstatus_t
 ffi_server_connect(struct server *server) {
     struct server_pool *pool;
