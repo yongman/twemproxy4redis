@@ -53,6 +53,7 @@ function _M.fetch_server(self, config)
       s = table.remove(self._se_pool, 1)
       -- update config
       s:update_config(config)
+      s:update_raw();
    end
 
    return s

@@ -64,14 +64,17 @@ function _M.update_config(self, config)
    self.room = config.room
    self.ranges = config.ranges
    self.addr = string.format("%s:%d", self.ip, self.port)
-   -- update s.raw address --
-   C.ffi_server_update_addr(self.raw, self.addr, self.ip, self.port)
 
    if self.role == "master" and _M.zone_index["$master"] then
       self.tag_idx = _M.zone_index["$master"]
    else
       self.tag_idx = _M.zone_index[self.zone] or -1
    end
+end
+
+function _M.update_raw(self)
+   -- update s.raw address --
+   C.ffi_server_update_addr(self.raw, self.addr, self.ip, self.port)
 end
 
 function _M.connect(self)
