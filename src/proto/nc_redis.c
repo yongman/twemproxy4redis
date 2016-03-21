@@ -2991,7 +2991,7 @@ redis_routing(struct context *ctx, struct server_pool *pool,
 }
 
 static rstatus_t
-build_custom_message(struct msg *r, uint8_t *msgbody, size_t msglen, int noreply)
+build_custom_message(struct msg *r, uint8_t *msgbody, size_t msglen, int noreply, int swallow)
 {
     struct mbuf *mbuf;
     size_t msize;
@@ -3012,6 +3012,7 @@ build_custom_message(struct msg *r, uint8_t *msgbody, size_t msglen, int noreply
     mbuf_copy(mbuf, msgbody, msglen);
     r->mlen += (uint32_t)msglen;
     r->noreply = noreply;
+    r->swallow = swallow;
     
     return NC_OK;
 }
@@ -3083,7 +3084,7 @@ redis_pre_rsp_forward(struct context *ctx, struct conn * s_conn, struct msg *msg
             }
 
             status = build_custom_message(ask_msg, (uint8_t*)REDIS_CLUSTER_ASKING_MESSAGE, 
-                                          sizeof(REDIS_CLUSTER_ASKING_MESSAGE)-1, 1);
+                                          sizeof(REDIS_CLUSTER_ASKING_MESSAGE)-1, 0, 1);
             if (status != NC_OK) {
                 msg_put(ask_msg);
                 goto ferror;
@@ -3257,7 +3258,7 @@ redis_pool_tick(struct server_pool *pool)
         }
 
         status = build_custom_message(msg, (uint8_t*)REDIS_CLUSTER_NODES_MESSAGE,
-                                      sizeof(REDIS_CLUSTER_NODES_MESSAGE)-1, 0);
+                                      sizeof(REDIS_CLUSTER_NODES_MESSAGE)-1, 0, 0);
         if (status != NC_OK) {
             log_warn("redis: failed to build probe message");
             msg_put(msg);
