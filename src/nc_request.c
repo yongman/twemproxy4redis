@@ -621,6 +621,11 @@ req_forward(struct context *ctx, struct conn *c_conn, struct msg *msg)
 
     ASSERT(c_conn->client && !c_conn->proxy);
 
+    if (msg->pre_req_forward != NULL &&
+        msg->pre_req_forward(ctx, c_conn, msg) != NC_OK) {
+        return;
+    }
+
     /* enqueue message (request) into client outq, if response is expected */
     if (!msg->noreply) {
         c_conn->enqueue_outq(ctx, c_conn, msg);

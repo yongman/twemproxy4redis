@@ -32,6 +32,23 @@
     ACTION( fragments,              STATS_COUNTER,      "# fragments created from a multi-vector request")          \
     ACTION( servers_update_at,      STATS_TIMESTAMP,    "timestamp when servers updated")                           \
     ACTION( slots_update_at,        STATS_TIMESTAMP,    "timestamp when slots updated")                             \
+    ACTION( total_requests,         STATS_COUNTER,      "# total requests received")                                \
+    /* Redis */                                                                                                     \
+    ACTION( redis_req_get,          STATS_COUNTER,      "# get requests")                                           \
+    ACTION( redis_req_set,          STATS_COUNTER,      "# set requests")                                           \
+    ACTION( redis_req_del,          STATS_COUNTER,      "# del requests")                                           \
+    ACTION( redis_req_incr_decr,    STATS_COUNTER,      "# incr and decr requests")                                 \
+    ACTION( redis_req_mget,         STATS_COUNTER,      "# mget requests")                                          \
+    ACTION( redis_req_mset,         STATS_COUNTER,      "# mset requests")                                          \
+    ACTION( redis_req_scan,         STATS_COUNTER,      "# scan requests")                                          \
+    ACTION( redis_req_sort,         STATS_COUNTER,      "# sort requests")                                          \
+    ACTION( redis_req_lrem,         STATS_COUNTER,      "# lrem requests")                                          \
+    ACTION( redis_req_sunion,       STATS_COUNTER,      "# sunion requests")                                        \
+    ACTION( redis_req_lists,        STATS_COUNTER,      "# list related requests")                                  \
+    ACTION( redis_req_sets,         STATS_COUNTER,      "# sets related requests")                                  \
+    ACTION( redis_req_hashs,        STATS_COUNTER,      "# hash related requests")                                  \
+    ACTION( redis_req_sortedsets,   STATS_COUNTER,      "# zset related requests")                                  \
+    ACTION( redis_req_other,        STATS_COUNTER,      "# other requests")                                         \
 
 #define STATS_SERVER_CODEC(ACTION)                                                                                  \
     /* server behavior */                                                                                           \

@@ -3006,20 +3006,104 @@ build_custom_message(struct msg *r, uint8_t *msgbody, size_t msglen, int noreply
     r->pos = mbuf->pos;
 
     msize = mbuf_size(mbuf);
-    
+
     ASSERT(msize >= msglen);
-    
+
     mbuf_copy(mbuf, msgbody, msglen);
     r->mlen += (uint32_t)msglen;
     r->noreply = noreply;
     r->swallow = swallow;
-    
+
     return NC_OK;
 }
 
 rstatus_t
 redis_pre_req_forward(struct context *ctx, struct conn *conn, struct msg *msg)
 {
+    //add redis command stats
+    struct server_pool *pool;
+
+    ASSERT(conn->client && conn->owner != NULL);
+
+    pool = conn->owner;
+
+    stats_pool_incr(ctx, pool, total_requests);
+
+    switch(msg->type) {
+    case MSG_REQ_REDIS_GET:
+         stats_pool_incr(ctx, pool, redis_req_get);
+         break;
+    case MSG_REQ_REDIS_SET:
+         stats_pool_incr(ctx, pool, redis_req_set);
+         break;
+    case MSG_REQ_REDIS_DEL:
+         stats_pool_incr(ctx, pool, redis_req_del);
+         break;
+    case MSG_REQ_REDIS_INCR:
+    case MSG_REQ_REDIS_DECR:
+         stats_pool_incr(ctx, pool, redis_req_incr_decr);
+         break;
+    case MSG_REQ_REDIS_MGET:
+         stats_pool_incr(ctx, pool, redis_req_mget);
+         break;
+    case MSG_REQ_REDIS_SORT:
+         stats_pool_incr(ctx, pool, redis_req_sort);
+         break;
+    case MSG_REQ_REDIS_LREM:
+          stats_pool_incr(ctx, pool, redis_req_lrem);
+          /* do not break as this is a list operation as the following.
+           * We count twice the LREM because it is an intensive operation/
+           *  */
+    case MSG_REQ_REDIS_LRANGE:
+    case MSG_REQ_REDIS_LSET:
+    case MSG_REQ_REDIS_LTRIM:
+    case MSG_REQ_REDIS_LINDEX:
+    case MSG_REQ_REDIS_LPUSHX:
+         stats_pool_incr(ctx, pool, redis_req_lists);
+         break;
+    case MSG_REQ_REDIS_SUNION:
+         stats_pool_incr(ctx, pool, redis_req_sunion);
+         /* do not break as this is a set operation as the following.
+          * We count twice the SUNION because it is an intensive operation/
+          *  */
+    case MSG_REQ_REDIS_SETBIT:
+    case MSG_REQ_REDIS_SETEX:
+    case MSG_REQ_REDIS_SETRANGE:
+    case MSG_REQ_REDIS_SADD:
+    case MSG_REQ_REDIS_SDIFF:
+    case MSG_REQ_REDIS_SDIFFSTORE:
+    case MSG_REQ_REDIS_SINTER:
+    case MSG_REQ_REDIS_SINTERSTORE:
+    case MSG_REQ_REDIS_SREM:
+    case MSG_REQ_REDIS_SUNIONSTORE:
+    case MSG_REQ_REDIS_SSCAN:
+        stats_pool_incr(ctx, pool, redis_req_set);
+        break;
+    case MSG_REQ_REDIS_ZADD:
+    case MSG_REQ_REDIS_ZINTERSTORE:
+    case MSG_REQ_REDIS_ZRANGE:
+    case MSG_REQ_REDIS_ZRANGEBYSCORE:
+    case MSG_REQ_REDIS_ZREM:
+    case MSG_REQ_REDIS_ZREVRANGE:
+    case MSG_REQ_REDIS_ZREVRANGEBYSCORE:
+    case MSG_REQ_REDIS_ZUNIONSTORE:
+    case MSG_REQ_REDIS_ZSCAN:
+    case MSG_REQ_REDIS_ZCOUNT:
+    case MSG_REQ_REDIS_ZINCRBY:
+    case MSG_REQ_REDIS_ZREMRANGEBYRANK:
+    case MSG_REQ_REDIS_ZREMRANGEBYSCORE:
+        stats_pool_incr(ctx, pool, redis_req_sortedsets);
+        break;
+    case MSG_REQ_REDIS_HINCRBY:
+    case MSG_REQ_REDIS_HINCRBYFLOAT:
+    case MSG_REQ_REDIS_HSET:
+    case MSG_REQ_REDIS_HSETNX:
+        stats_pool_incr(ctx, pool, redis_req_hashs);
+        break;
+    default:
+        stats_pool_incr(ctx, pool, redis_req_other);
+        break;
+    }
     return NC_OK;
 }
 
