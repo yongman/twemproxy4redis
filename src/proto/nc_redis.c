@@ -3077,7 +3077,7 @@ redis_pre_req_forward(struct context *ctx, struct conn *conn, struct msg *msg)
     case MSG_REQ_REDIS_SREM:
     case MSG_REQ_REDIS_SUNIONSTORE:
     case MSG_REQ_REDIS_SSCAN:
-        stats_pool_incr(ctx, pool, redis_req_set);
+        stats_pool_incr(ctx, pool, redis_req_sets);
         break;
     case MSG_REQ_REDIS_ZADD:
     case MSG_REQ_REDIS_ZINTERSTORE:
