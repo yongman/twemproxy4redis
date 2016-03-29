@@ -3046,6 +3046,9 @@ redis_pre_req_forward(struct context *ctx, struct conn *conn, struct msg *msg)
     case MSG_REQ_REDIS_MGET:
          stats_pool_incr(ctx, pool, redis_req_mget);
          break;
+    case MSG_REQ_REDIS_MSET:
+         stats_pool_incr(ctx, pool, redis_req_mset);
+         break;
     case MSG_REQ_REDIS_SORT:
          stats_pool_incr(ctx, pool, redis_req_sort);
          break;

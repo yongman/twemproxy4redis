@@ -40,7 +40,6 @@
     ACTION( redis_req_incr_decr,    STATS_COUNTER,      "# incr and decr requests")                                 \
     ACTION( redis_req_mget,         STATS_COUNTER,      "# mget requests")                                          \
     ACTION( redis_req_mset,         STATS_COUNTER,      "# mset requests")                                          \
-    ACTION( redis_req_scan,         STATS_COUNTER,      "# scan requests")                                          \
     ACTION( redis_req_sort,         STATS_COUNTER,      "# sort requests")                                          \
     ACTION( redis_req_lrem,         STATS_COUNTER,      "# lrem requests")                                          \
     ACTION( redis_req_sunion,       STATS_COUNTER,      "# sunion requests")                                        \
