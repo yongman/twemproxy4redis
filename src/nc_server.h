@@ -160,6 +160,7 @@ struct server_pool {
     unsigned           ffi_slots_update:1;
     struct array       ffi_server;
     struct replicaset  *ffi_slots[REDIS_CLUSTER_SLOTS];
+    int                pool_tick_count;
 };
 
 void server_ref(struct conn *conn, void *owner);

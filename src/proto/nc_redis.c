@@ -35,6 +35,7 @@
 #define AUTH_NO_PASSWORD "-ERR Client sent AUTH, but no password is set\r\n"
 
 #define REDIS_UPDATE_TICKS (1000/NC_TICK_INTERVAL) /* 1s */
+#define REDIS_UPDATE_SERVER_PERIOD 60
 #define REDIS_CLUSTER_NODES_MESSAGE "*3\r\n$7\r\ncluster\r\n$5\r\nnodes\r\n$5\r\nextra\r\n"
 #define REDIS_CLUSTER_ASKING_MESSAGE "*1\r\n$6\r\nASKING\r\n"
 
@@ -3177,7 +3178,7 @@ redis_pre_rsp_forward(struct context *ctx, struct conn * s_conn, struct msg *msg
                 goto ferror;
             }
 
-            status = req_enqueue(pool->ctx, s_conn, NULL, ask_msg);
+            status = req_enqueue(pool->ctx, s_conn, c_conn, ask_msg);
             if (status != NC_OK) {
 				msg_put(ask_msg);
                 goto ferror;
@@ -3324,6 +3325,7 @@ redis_pool_tick(struct server_pool *pool)
 {
     if (pool->ticks_left <= 0) {
         pool->need_update_slots = 1;
+        pool->pool_tick_count = (pool->pool_tick_count + 1) % REDIS_UPDATE_SERVER_PERIOD;
         pool->ticks_left = REDIS_UPDATE_TICKS;
     } else {
         pool->ticks_left--;
@@ -3412,7 +3414,8 @@ redis_pool_tick(struct server_pool *pool)
         }
     }
 
-    if (pool->ffi_server_update) {
+    /* server run once in period one REDIS_UPDATE_SERVER_PERIOD */
+    if (pool->ffi_server_update && (pool->pool_tick_count == 0 || pool->first_update == 0)) {
         uint32_t i, n, m;
         struct server **s, **se;
         rstatus_t status;
@@ -3513,7 +3516,8 @@ redis_pool_tick(struct server_pool *pool)
         pool->first_update = 1;
     }
 
-    if (pool->ffi_slots_update) {
+    /* dont update slot when server has not been updated */
+    if (pool->ffi_slots_update && pool->ffi_server_update == 0) {
         /* update slots */
         int64_t now;
 
