@@ -783,6 +783,9 @@ req_send_next(struct context *ctx, struct conn *conn)
 void
 req_send_done(struct context *ctx, struct conn *conn, struct msg *msg)
 {
+    struct server_pool *sp;
+    struct server *server;
+
     ASSERT(!conn->client && !conn->proxy);
     ASSERT(msg != NULL && conn->smsg == NULL);
     ASSERT(msg->request && !msg->done);
@@ -794,6 +797,19 @@ req_send_done(struct context *ctx, struct conn *conn, struct msg *msg)
     /* dequeue the message (request) from server inq */
     conn->dequeue_inq(ctx, conn, msg);
 
+    server = conn->owner;
+    ASSERT(server!=NULL);
+    sp = server->owner;
+    ASSERT(sp!=NULL);
+    if (sp->slowlog) {
+        int64_t now = nc_msec_now();
+        if (now < 0) {
+            log_debug(LOG_WARN, "slowlog access start time failed!");
+            now = 0;
+        }
+        msg->slowlog_stime = now;
+    }
+    
     /*
      * noreply request instructs the server not to send any response. So,
      * enqueue message (request) in server outq, if response is expected.

@@ -130,6 +130,14 @@ static struct command conf_commands[] = {
       conf_add_server,
       offsetof(struct conf_pool, server) },
 
+    { string("slowlog"),
+      conf_set_bool,
+      offsetof(struct conf_pool, slowlog) },
+
+    { string("slowlog_slower_than"),
+      conf_set_num,
+      offsetof(struct conf_pool, slowlog_slower_than) },
+
     null_command
 };
 
@@ -192,6 +200,9 @@ conf_server_each_transform(void *elem, void *data)
     s->next_retry = 0LL;
     s->failure_count = 0;
 
+    s->auto_ban_flag = false;
+    s->lift_ban_time = 0LL;
+
     log_debug(LOG_VERB, "transform to server %"PRIu32" '%.*s'",
               s->idx, s->pname.len, s->pname.data);
 
@@ -233,6 +244,8 @@ conf_pool_init(struct conf_pool *cp, struct string *name)
     string_init(&cp->env);
     string_init(&cp->whitelist);
     cp->whitelist_interval = CONF_UNSET_NUM;
+    cp->slowlog = CONF_UNSET_NUM;
+    cp->slowlog_slower_than = CONF_UNSET_NUM;
 
     array_null(&cp->server);
 
@@ -327,6 +340,8 @@ conf_pool_each_transform(void *elem, void *data)
     sp->redis_db = cp->redis_db;
     sp->timeout = cp->timeout;
     sp->backlog = cp->backlog;
+    sp->slowlog = cp->slowlog? 1 : 0;
+    sp->slowlog_slower_than = cp->slowlog_slower_than;
 
     sp->client_connections = (uint32_t)cp->client_connections;
 
@@ -400,6 +415,8 @@ conf_dump(struct conf *cf)
                   cp->whitelist_interval);
         log_debug(LOG_VVERB, "  env: %s", cp->env.data);
         nserver = array_n(&cp->server);
+        log_debug(LOG_VVERB, "  slowlog: %d", cp->slowlog);
+        log_debug(LOG_VVERB, "  slowlog_slower_than: %d", cp->slowlog_slower_than);
         log_debug(LOG_VVERB, "  servers: %"PRIu32"", nserver);
 
         for (j = 0; j < nserver; j++) {
@@ -1314,6 +1331,14 @@ conf_validate_pool(struct conf *cf, struct conf_pool *cp)
 
     if (cp->whitelist_interval == CONF_UNSET_NUM) {
         cp->whitelist_interval = CONF_DEFAULT_WHITELIST_INTERVAL;
+    }
+
+    if (cp->slowlog == CONF_UNSET_NUM) {
+        cp->slowlog = CONF_DEFAULT_SLOWLOG;
+    }
+
+    if (cp->slowlog_slower_than == CONF_UNSET_NUM) {
+        cp->slowlog_slower_than = CONF_DEFAULT_SLOWLOG_SLOWER_THAN;
     }
 
     if (string_empty(&cp->whitelist)) {

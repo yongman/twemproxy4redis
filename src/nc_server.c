@@ -267,6 +267,16 @@ server_failure(struct context *ctx, struct server *server)
     int64_t now, next;
     rstatus_t status;
 
+    now = nc_msec_now();
+    if (now < 0) {
+        return;
+    }
+
+    if (!server->auto_ban_flag) {
+        server->auto_ban_flag = true;
+    }
+    server->lift_ban_time = now + pool->server_retry_timeout;
+
     if (!pool->auto_eject_hosts) {
         return;
     }
@@ -577,6 +587,9 @@ server_ok(struct context *ctx, struct conn *conn)
     ASSERT(!conn->client && !conn->proxy);
     ASSERT(conn->connected);
 
+    server->auto_ban_flag = false;
+    server->lift_ban_time = 0LL;
+    
     if (server->failure_count != 0) {
         log_debug(LOG_VERB, "reset server '%.*s' failure count from %"PRIu32
                   " to 0", server->pname.len, server->pname.data,

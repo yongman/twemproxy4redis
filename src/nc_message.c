@@ -245,6 +245,9 @@ done:
     msg->vlen = 0;
     msg->end = NULL;
 
+    msg->slowlog_stime = 0;
+    msg->slowlog_etime = 0;
+
     msg->frag_owner = NULL;
     msg->frag_seq = NULL;
     msg->nfrag = 0;
@@ -277,6 +280,7 @@ struct msg *
 msg_get(struct conn *conn, bool request, bool redis)
 {
     struct msg *msg;
+    struct server_pool *sp;
 
     msg = _msg_get();
     if (msg == NULL) {
@@ -286,6 +290,13 @@ msg_get(struct conn *conn, bool request, bool redis)
     msg->owner = conn;
     msg->request = request ? 1 : 0;
     msg->redis = redis ? 1 : 0;
+
+    // if (conn && conn->client && !conn->proxy) {
+    //     sp = conn->owner;
+    //     if (sp && sp->slowlog) {
+    //         msg->slowlog_stime = nc_msec_now();
+    //     }
+    // }
 
     if (redis) {
         if (request) {

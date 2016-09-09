@@ -2939,6 +2939,7 @@ redis_routing(struct context *ctx, struct server_pool *pool,
         uint32_t i, idx;
         rstatus_t status;
         struct server *server = NULL;
+        int64_t now;
 
         idx = server_pool_hash(pool, key, keylen) % REDIS_CLUSTER_SLOTS;
 
@@ -2948,22 +2949,96 @@ redis_routing(struct context *ctx, struct server_pool *pool,
             return NULL;
         }
 
+        now = nc_msec_now();
+        if (now < 0) {
+            log_debug(LOG_WARN, "access now time failed!");
+        }
+
         if (msg->type > MSG_REQ_REDIS_WRITECMD_START) {
             server = pool->slots[idx]->master;
+            if (server == NULL) {
+                log_debug(LOG_WARN, "no accessible server found in slot %d", idx);
+                return NULL;
+            }
+
+            if (server->auto_ban_flag) {
+                if (server->lift_ban_time <= now) {
+                    log_warn("'%.*s'(write) ever disconnected, don't cost ban period, maybe write failed!", server->pname.len, server->pname.data);
+                } else {
+                    log_warn("'%.*s'(write) ever disconnected, cost ban period, reset ban info!", server->pname.len, server->pname.data);
+                    server->auto_ban_flag = false;
+                    server->lift_ban_time = 0LL;
+                }
+            }
         } else {
+            uint32_t n;
+            struct array *slaves;
+            struct array *live_slaves;
+            struct server **ps;
+            int count;
+            int index;
+
+            live_slaves = array_create(4, sizeof(struct server *));
+            if (live_slaves == NULL) {
+                log_warn("select unban server, array_init failed!");
+                return NULL;
+            }
+
             for (i = 0; i < NC_MAXTAGNUM; i++) {
-                uint32_t n;
-                struct array *slaves;
-
                 slaves = &pool->slots[idx]->tagged_servers[i];
+                if (slaves == NULL) {
+                    log_warn("no accessible tagged_servers found in slot %d", idx);
+                    return NULL;
+                }
+                count = array_n(slaves);
+                server = NULL;
 
-                if (array_n(slaves) == 0) {
+                if (count == 0) {
                     continue;
                 }
-                n = random() % array_n(slaves);
-                server = *(struct server**)array_get(slaves, n);
+
+                index = count - 1;
+                while (index >= 0) {
+                    server = *(struct server**)array_get(slaves, index);
+                    index--;
+                    if (server->auto_ban_flag) {
+                        if (server->lift_ban_time > now) {
+                            log_warn("'%.*s'(read) ever disconnected, don't cost ban period, skip this slave!", server->pname.len, server->pname.data);
+                            continue;
+                        } else {
+                            log_warn("'%.*s'(read) ever disconnected, cost ban period, pick up it to live slaves!", server->pname.len, server->pname.data);
+                            server->auto_ban_flag = false;
+                            server->lift_ban_time = 0LL;
+                            ps = array_push(live_slaves);
+                            *ps = server;
+                        }
+                    } else {
+                        server->auto_ban_flag = false;
+                        server->lift_ban_time = 0LL;
+                        ps = array_push(live_slaves);
+                        *ps = server;
+                    }
+                }
+
+                if (array_n(live_slaves) == 0) {
+                    server = NULL;
+                    continue;
+                } 
+                n = random() % array_n(live_slaves);
+                server = *(struct server**)array_get(live_slaves, n);
+                array_null(live_slaves);
+                array_deinit(live_slaves);
                 break;
             }
+
+            if (server == NULL) {
+                log_warn("all slaves are banned, random one from local region!");
+                slaves = &pool->slots[idx]->tagged_servers[0];
+                n = random() % array_n(slaves);
+                server = *(struct server**)array_get(slaves, n);
+            }
+
+            array_destroy(live_slaves);
         }
         if (server == NULL) {
             log_debug(LOG_WARN, "no accessible server found in slot %d", idx);

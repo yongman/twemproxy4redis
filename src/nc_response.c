@@ -17,6 +17,7 @@
 
 #include <nc_core.h>
 #include <nc_server.h>
+#include <netdb.h>
 
 struct msg *
 rsp_get(struct conn *conn)
@@ -220,6 +221,8 @@ rsp_forward(struct context *ctx, struct conn *s_conn, struct msg *msg)
     struct msg *pmsg;
     struct conn *c_conn;
     uint32_t msgsize;
+    struct server_pool *sp;
+    struct server *server;
 
     msgsize = msg->mlen;
 
@@ -244,6 +247,22 @@ rsp_forward(struct context *ctx, struct conn *s_conn, struct msg *msg)
 
     pmsg->done = 1;
 
+    server = s_conn->owner;
+    ASSERT(server!=NULL);
+    sp = server->owner;
+    ASSERT(sp!=NULL);
+    if (sp->slowlog) {
+        int64_t now = nc_msec_now();
+        if (now < 0) {
+            log_debug(LOG_WARN, "slowlog access end time failed!");
+            now = 0;
+        } else {
+            pmsg->slowlog_etime = now;
+            check_out_slowlog(sp, pmsg);
+        }
+    }
+
+    
     msg->pre_coalesce(msg);
 
     c_conn = pmsg->owner;
@@ -341,6 +360,7 @@ void
 rsp_send_done(struct context *ctx, struct conn *conn, struct msg *msg)
 {
     struct msg *pmsg; /* peer message (request) */
+    // struct server_pool *sp; 
 
     ASSERT(conn->client && !conn->proxy);
     ASSERT(conn->smsg == NULL);
@@ -358,3 +378,50 @@ rsp_send_done(struct context *ctx, struct conn *conn, struct msg *msg)
 
     req_put(pmsg);
 }
+
+void 
+check_out_slowlog(struct server_pool *sp, struct msg *msg) {
+
+    struct msg *pmsg; /* peer message (response) */
+    struct conn *c_conn;
+    struct conn *s_conn;
+    int64_t cost_time;
+    int client_fd;
+    int server_fd;
+    char *c_host;
+    char *s_host;
+    static char client_host[NI_MAXHOST + NI_MAXSERV];
+    static char server_host[NI_MAXHOST + NI_MAXSERV];
+
+    ASSERT(sp->slowlog);
+    cost_time = msg->slowlog_etime - msg->slowlog_stime;
+    if (cost_time < sp-> slowlog_slower_than) {
+        return;
+    }
+
+    pmsg = msg->peer;
+
+    ASSERT(msg->done == 1);
+    ASSERT(msg->request && !pmsg->request);
+
+    c_conn = msg->owner;
+    s_conn = pmsg->owner;
+
+    client_fd = c_conn == NULL ? 0 : c_conn->sd;
+    server_fd = s_conn == NULL ? 0 : s_conn->sd;
+
+    c_host = nc_unresolve_peer_desc(client_fd);
+    memcpy(client_host, c_host, NI_MAXHOST + NI_MAXSERV);
+    s_host = nc_unresolve_peer_desc(server_fd);
+    memcpy(server_host, s_host, NI_MAXHOST + NI_MAXSERV);
+
+    log_slow("request_msg_id=%"PRIu64", client_address=%s, server_address=%s, start_time=%"PRIu64", cost_time=%"PRIu64"ms, fragment_num=%"PRIu32"",
+        msg->id, client_host, server_host, msg->slowlog_stime, cost_time, msg->nfrag);  
+}
+
+
+
+
+
+
+

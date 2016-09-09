@@ -88,6 +88,9 @@ struct server {
 
     int64_t            next_retry;    /* next retry time in usec */
     uint32_t           failure_count; /* # consecutive failures */
+
+    bool               auto_ban_flag; /* if disconnect, set true */
+    int64_t            lift_ban_time; /* if set auto_ban_flag , lift banne time */
 };
 
 #define NC_MAXTAGNUM 10
@@ -136,6 +139,9 @@ struct server_pool {
     uint32_t           msg_max_length_limit; /* msg max length limit */
     unsigned           auto_eject_hosts:1;   /* auto_eject_hosts? */
     unsigned           preconnect:1;         /* preconnect? */
+
+    unsigned           slowlog;              /* slowlog? */
+    int64_t            slowlog_slower_than;  /* slowlog time setting */
 
     unsigned           redis:1;              /* redis? */
     unsigned           rediscluster:1;       /* rediscluster? */

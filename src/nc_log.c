@@ -25,23 +25,92 @@
 #include <nc_core.h>
 
 static struct logger logger;
+static int status;
+static char tem_buf[8 * LOG_MAX_LEN];
+static char wf_name[LOG_FILENAME_LEN];
+
+void
+wflog_init() {
+    struct logger *l = &logger;
+    char *index;
+    int len = 0;
+
+    index = l->name;
+    while (*index != '\0') {
+        index++;
+        len ++;
+    }
+    memcpy(wf_name, l->name, (size_t)(len));
+    l->wf_name = wf_name;
+    *(wf_name + len) = '.';
+    *(wf_name + len + 1) = 'w';
+    *(wf_name + len + 2) = 'f';
+    *(wf_name + len + 3) = '\0';
+
+    return;
+}
 
 int
-log_init(int level, char *name)
+log_init(struct instance *nci)
 {
     struct logger *l = &logger;
 
-    l->level = MAX(LOG_EMERG, MIN(level, LOG_PVERB));
-    l->name = name;
-    if (name == NULL || !strlen(name)) {
+    l->level = MAX(LOG_EMERG, MIN(nci->log_level, LOG_PVERB));
+    l->name = nci->log_filename;
+    wflog_init();
+    l->nerror = 0;
+
+    if (l->name == NULL || !strlen(l->name)) {
         l->fd = STDERR_FILENO;
     } else {
-        l->fd = open(name, O_WRONLY | O_APPEND | O_CREAT, 0644);
+        l->fd = open(l->name, O_WRONLY | O_APPEND | O_CREAT, 0644);
         if (l->fd < 0) {
-            log_stderr("opening log file '%s' failed: %s", name,
+            log_stderr("opening log file '%s' failed: %s", l->name,
                        strerror(errno));
             return -1;
         }
+    }
+    
+    if (l->wf_name == NULL || !strlen(l->wf_name)) {
+        l->wfd = STDERR_FILENO;
+    } else {
+        l->wfd = open(l->wf_name, O_WRONLY | O_APPEND | O_CREAT, 0644);
+        if (l->fd < 0) {
+            log_stderr("opening log file '%s' failed: %s", l->wf_name,
+                       strerror(errno));
+            return -1;
+        }
+    }
+
+    l->log_buf = (char*) malloc(LOG_BUF_SIZE);
+    l->wflog_buf = (char*) malloc(LOG_BUF_SIZE);
+    memset(l->log_buf, 0, LOG_BUF_SIZE);
+    memset(l->wflog_buf, 0, LOG_BUF_SIZE);
+
+    l->log_buf_pos = 0;
+    l->log_buf_last = 0;
+    l->wflog_buf_pos = 0;
+    l->wflog_buf_last = 0;
+
+    status = pipe(l->notify_fd);
+    if (status != 0) {
+        log_stderr("pipe failed");
+        return -1;
+    }
+
+    status = fcntl(l->notify_fd[1], F_SETFL, O_NONBLOCK);
+    if (status == -1) {
+        log_stderr("fcntl log pipe failed");
+        return -1;
+    }
+
+    pthread_mutex_t temp_mutex = PTHREAD_MUTEX_INITIALIZER;
+    memcpy(&l->log_mutex, &temp_mutex, sizeof(temp_mutex));
+
+    status = pthread_create(&l->log_thread, NULL, log_thread_loop, NULL);
+    if (status) {
+        log_stderr("create log thread failed");
+        return -1;
     }
 
     return 0;
@@ -52,11 +121,17 @@ log_deinit(void)
 {
     struct logger *l = &logger;
 
-    if (l->fd < 0 || l->fd == STDERR_FILENO) {
+    fsync(l->fd);
+    fsync(l->wfd);
+
+    nc_free(l->log_buf);
+    nc_free(l->wflog_buf);
+
+    if ((l->fd < 0 || l->fd == STDERR_FILENO) && (l->wfd < 0 || l->wfd == STDERR_FILENO)) {
         return;
     }
-
     close(l->fd);
+    close(l->wfd);
 }
 
 void
@@ -69,6 +144,15 @@ log_reopen(void)
         l->fd = open(l->name, O_WRONLY | O_APPEND | O_CREAT, 0644);
         if (l->fd < 0) {
             log_stderr_safe("reopening log file '%s' failed, ignored: %s", l->name,
+                       strerror(errno));
+        }
+    }
+
+    if (l->wfd != STDERR_FILENO) {
+        close(l->wfd);
+        l->wfd = open(l->wf_name, O_WRONLY | O_APPEND | O_CREAT, 0644);
+        if (l->wfd < 0) {
+            log_stderr_safe("reopening log file '%s' failed, ignored: %s", l->wf_name,
                        strerror(errno));
         }
     }
@@ -113,7 +197,14 @@ log_stacktrace(void)
     if (l->fd < 0) {
         return;
     }
+    fsync(l->fd);
     nc_stacktrace_fd(l->fd);
+
+    if (l->wfd < 0) {
+        return;
+    }
+    fsync(l->wfd);
+    nc_stacktrace_fd(l->wfd);
 }
 
 int
@@ -128,24 +219,251 @@ log_loggable(int level)
     return 1;
 }
 
-void
-_log(const char *file, int line, int panic, const char *fmt, ...)
+
+void*
+log_thread_loop(void* loop)
 {
     struct logger *l = &logger;
-    int len, size, errno_save;
-    char buf[LOG_MAX_LEN];
+    char msg[1];
+    size_t size;
+    ssize_t writen; 
+
+    for(;;){
+        if (read(l->notify_fd[0], msg, 1) != 1) {
+            continue;
+        }
+        if (l->log_buf_pos != l->log_buf_last) {
+            if (l->log_buf_last < l->log_buf_pos) {
+                size = LOG_BUF_SIZE - l->log_buf_pos;
+                writen = write(l->fd, l->log_buf + l->log_buf_pos, size);
+                if (writen <= 0) {
+                    continue;
+                }
+                l->log_buf_pos += (size_t)writen;
+                l->log_buf_pos = l->log_buf_pos % LOG_BUF_SIZE;
+
+                size = l->log_buf_last - l->log_buf_pos;
+                writen = write(l->fd, l->log_buf + l->log_buf_pos, size);
+                if (writen <= 0) {
+                    continue;
+                }
+                l->log_buf_pos += (size_t)writen;
+                l->log_buf_pos = l->log_buf_pos % LOG_BUF_SIZE;
+
+            } else if (l->log_buf_last > l->log_buf_pos) {
+                size = l->log_buf_last - l->log_buf_pos;
+                writen = write(l->fd, l->log_buf + l->log_buf_pos, size);
+                if (writen <= 0) {
+                    continue;
+                }
+                l->log_buf_pos += (size_t)writen;
+                l->log_buf_pos = l->log_buf_pos % LOG_BUF_SIZE;
+            }
+            fsync(l->fd);
+        }
+        if (l->wflog_buf_pos != l->wflog_buf_last) {
+            if (l->wflog_buf_last < l->wflog_buf_pos) {
+                size = LOG_BUF_SIZE - l->wflog_buf_pos;
+                writen = write(l->wfd, l->wflog_buf + l->wflog_buf_pos, size);
+                if (writen <= 0) {
+                    continue;
+                }
+                l->wflog_buf_pos += (size_t)writen;
+                l->wflog_buf_pos = l->wflog_buf_pos % LOG_BUF_SIZE;
+
+                size = l->wflog_buf_last - l->wflog_buf_pos;
+                writen = write(l->wfd, l->wflog_buf + l->wflog_buf_pos, size);
+                if (writen <= 0) {
+                    continue;
+                }
+                l->wflog_buf_pos += (size_t)writen;
+                l->wflog_buf_pos = l->wflog_buf_pos % LOG_BUF_SIZE;
+
+            } else if (l->wflog_buf_last > l->wflog_buf_pos) {
+                size = l->wflog_buf_last - l->wflog_buf_pos;
+                writen = write(l->wfd, l->wflog_buf + l->wflog_buf_pos, size);
+                if (writen <= 0) {
+                    continue;
+                }
+                l->wflog_buf_pos += (size_t)writen;
+                l->wflog_buf_pos = l->wflog_buf_pos % LOG_BUF_SIZE;
+            }
+            fsync(l->wfd);
+        }
+    }
+}
+
+void
+_log_level(int level, char *buf , int *pos)
+{
+    int len = *pos;
+    int size = LOG_MAX_LEN;
+
+    switch (level) {
+        case LOG_SLOW :
+            len += nc_scnprintf(buf + len, size - len, "%s", "[SLOW]");
+            *pos = len;
+            break;
+        case LOG_EMERG :
+            len += nc_scnprintf(buf + len, size - len, "%s", "[PANIC]");
+            *pos = len;
+            break;
+        case LOG_ALERT :
+            len += nc_scnprintf(buf + len, size - len, "%s", "[ERROR]");
+            *pos = len;
+            break;
+        case LOG_CRIT :
+            len += nc_scnprintf(buf + len, size - len, "%s", "[CRIT]");
+            *pos = len;
+            break;
+        case LOG_ERR :
+            len += nc_scnprintf(buf + len, size - len, "%s", "[ERCON]");
+            *pos = len;
+            break;
+        case LOG_WARN :
+            len += nc_scnprintf(buf + len, size - len, "%s", "[WARN]");
+            *pos = len;
+            break;
+        case LOG_NOTICE :
+            len += nc_scnprintf(buf + len, size - len, "%s", "[NOTICE]");
+            *pos = len;
+            break;
+        case LOG_INFO :
+            len += nc_scnprintf(buf + len, size - len, "%s", "[INFO]");
+            *pos = len;
+            break;
+        case LOG_DEBUG :
+            len += nc_scnprintf(buf + len, size - len, "%s", "[DEBUG]");
+            *pos = len;
+            break;
+        case LOG_VERB :
+            len += nc_scnprintf(buf + len, size - len, "%s", "[INFO]");
+            *pos = len;
+            break;
+        case LOG_VVERB :
+            len += nc_scnprintf(buf + len, size - len, "%s", "[INFO]");
+            *pos = len;
+            break;
+        case LOG_VVVERB :
+            len += nc_scnprintf(buf + len, size - len, "%s", "[INFO]");
+            *pos = len;
+            break;
+        case LOG_PVERB :
+            len += nc_scnprintf(buf + len, size - len, "%s", "[INFO]");
+            *pos = len;
+            break;
+        case LOG_ALWAYS :
+            len += nc_scnprintf(buf + len, size - len, "%s", "[INFO]");
+            *pos = len;
+            break;
+        default:
+            len += nc_scnprintf(buf + len, size - len, "%s", "[]");
+            *pos = len;
+        }
+
+    return;
+}
+
+int
+_log_switch(int level) 
+{
+    if (level <= LOG_WARN)
+        return LOG_WF;
+    else
+        return LOG_COMMIT;
+}
+
+int
+_log_write_logbuf(char *dest, size_t *pos ,size_t *last, char *buf , int len)
+{
+    status = 1;
+    size_t size;
+    size_t read = *pos;
+    size_t write = *last;
+    size_t length = (size_t)len;
+    size_t ret;
+
+    ret = LOG_BUF_SIZE - ((write - read + LOG_BUF_SIZE) % LOG_BUF_SIZE);
+    if (length > ret -1) {
+        if (ret - 1 > 0) {
+            length = ret - 1;
+        } else {
+            length = 0;
+            status = -1;
+            return status;
+        }
+    }
+
+    if (write + length > LOG_BUF_SIZE) {
+        size = LOG_BUF_SIZE - write;
+        memcpy(dest + write, buf, size);
+        write += size;
+        write = write % LOG_BUF_SIZE;
+        length = length - size;
+        buf = buf + size;
+
+        memcpy(dest + write, buf, length);
+        write += length;
+        write = write % LOG_BUF_SIZE;
+    } else if (write + length <= LOG_BUF_SIZE) {
+        memcpy(dest + write, buf, length);
+        write += length;
+        write = write % LOG_BUF_SIZE;
+    }
+
+    *last = write;
+    return status;
+}
+
+void
+_log_write_buf(int level, char *buf, int len)
+{
+    if (len <= 0 && len >= LOG_MAX_LEN) {
+        return;
+    }
+
+    struct logger *l = &logger;
+    char *dest;
+    size_t *pos;
+    size_t *last;
+
+    pthread_mutex_lock(&(l->log_mutex));
+    if (_log_switch(level)) {
+        dest = l->wflog_buf;
+        pos = &(l->wflog_buf_pos);
+        last = &(l->wflog_buf_last);
+    }else {
+        dest = l->log_buf;
+        pos = &(l->log_buf_pos);
+        last = &(l->log_buf_last);
+    }
+    status = _log_write_logbuf(dest, pos, last, buf, len);
+    if (status != 1) {
+        log_stderr("copy log to log buf failed");
+    }
+    if (write(l->notify_fd[1], "1", 1) != 1) {
+        log_stderr("notify log thread failed");
+    }
+    pthread_mutex_unlock(&(l->log_mutex));
+}
+
+void
+_log(int level, const char *file, int line, int panic, const char *fmt, ...)
+{
+    struct logger *l = &logger;
+    int len, size;
+    char *buf = tem_buf;
     va_list args;
-    ssize_t n;
     struct timeval tv;
 
     if (l->fd < 0) {
         return;
     }
 
-    errno_save = errno;
     len = 0;            /* length of output buffer */
     size = LOG_MAX_LEN; /* size of output buffer */
 
+    _log_level(level, buf, &len);
     gettimeofday(&tv, NULL);
     buf[len++] = '[';
     len += nc_strftime(buf + len, size - len, "%Y-%m-%d %H:%M:%S.", localtime(&tv.tv_sec));
@@ -158,12 +476,7 @@ _log(const char *file, int line, int panic, const char *fmt, ...)
 
     buf[len++] = '\n';
 
-    n = nc_write(l->fd, buf, len);
-    if (n < 0) {
-        l->nerror++;
-    }
-
-    errno = errno_save;
+    _log_write_buf(level, buf, len);
 
     if (panic) {
         abort();
@@ -171,11 +484,11 @@ _log(const char *file, int line, int panic, const char *fmt, ...)
 }
 
 void
-_log_stderr(const char *fmt, ...)
+_log_stderr(int level, const char *fmt, ...)
 {
     struct logger *l = &logger;
     int len, size, errno_save;
-    char buf[4 * LOG_MAX_LEN];
+    char *buf = tem_buf;
     va_list args;
     ssize_t n;
 
@@ -183,6 +496,7 @@ _log_stderr(const char *fmt, ...)
     len = 0;                /* length of output buffer */
     size = 4 * LOG_MAX_LEN; /* size of output buffer */
 
+    _log_level(level, buf, &len);
     va_start(args, fmt);
     len += nc_vscnprintf(buf, size, fmt, args);
     va_end(args);
@@ -202,24 +516,23 @@ _log_stderr(const char *fmt, ...)
  * See -C option in man hexdump
  */
 void
-_log_hexdump(const char *file, int line, char *data, int datalen,
+_log_hexdump(int level, const char *file, int line, char *data, int datalen,
              const char *fmt, ...)
 {
     struct logger *l = &logger;
-    char buf[8 * LOG_MAX_LEN];
-    int i, off, len, size, errno_save;
-    ssize_t n;
+    char *buf = tem_buf;
+    int i, off, len, size;
 
     if (l->fd < 0) {
         return;
     }
 
     /* log hexdump */
-    errno_save = errno;
     off = 0;                  /* data offset */
     len = 0;                  /* length of output buffer */
     size = 8 * LOG_MAX_LEN;   /* size of output buffer */
 
+    _log_level(level, buf, &len);
     while (datalen != 0 && (len < size - 1)) {
         char *save, *str;
         unsigned char c;
@@ -254,38 +567,27 @@ _log_hexdump(const char *file, int line, char *data, int datalen,
         off += 16;
     }
 
-    n = nc_write(l->fd, buf, len);
-    if (n < 0) {
-        l->nerror++;
-    }
-
+    _log_write_buf(level, buf, len);
     if (len >= size - 1) {
-        n = nc_write(l->fd, "\n", 1);
-        if (n < 0) {
-            l->nerror++;
-        }
+        _log_write_buf(level, "\n", 1);
     }
-
-    errno = errno_save;
 }
 
 void
-_log_safe(const char *fmt, ...)
+_log_safe(int level, const char *fmt, ...)
 {
     struct logger *l = &logger;
-    int len, size, errno_save;
-    char buf[LOG_MAX_LEN];
+    int len, size;
+    char *buf = tem_buf;
     va_list args;
-    ssize_t n;
 
     if (l->fd < 0) {
         return;
     }
-
-    errno_save = errno;
     len = 0;            /* length of output buffer */
     size = LOG_MAX_LEN; /* size of output buffer */
 
+    _log_level(level, buf, &len);
     len += nc_safe_snprintf(buf + len, size - len, "[.......................] ");
 
     va_start(args, fmt);
@@ -294,20 +596,15 @@ _log_safe(const char *fmt, ...)
 
     buf[len++] = '\n';
 
-    n = nc_write(l->fd, buf, len);
-    if (n < 0) {
-        l->nerror++;
-    }
-
-    errno = errno_save;
+    _log_write_buf(level, buf, len);
 }
 
 void
-_log_stderr_safe(const char *fmt, ...)
+_log_stderr_safe(int level, const char *fmt, ...)
 {
     struct logger *l = &logger;
     int len, size, errno_save;
-    char buf[LOG_MAX_LEN];
+    char *buf = tem_buf;
     va_list args;
     ssize_t n;
 
@@ -315,6 +612,7 @@ _log_stderr_safe(const char *fmt, ...)
     len = 0;            /* length of output buffer */
     size = LOG_MAX_LEN; /* size of output buffer */
 
+    _log_level(level, buf, &len);
     len += nc_safe_snprintf(buf + len, size - len, "[.......................] ");
 
     va_start(args, fmt);

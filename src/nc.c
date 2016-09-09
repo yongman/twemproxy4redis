@@ -60,6 +60,7 @@ static struct option long_options[] = {
     { "describe-stats", no_argument,        NULL,   'D' },
     { "verbose",        required_argument,  NULL,   'v' },
     { "output",         required_argument,  NULL,   'o' },
+    { "wflog",          required_argument,  NULL,   'w' },
     { "conf-file",      required_argument,  NULL,   'c' },
     { "stats-port",     required_argument,  NULL,   's' },
     { "stats-interval", required_argument,  NULL,   'i' },
@@ -70,7 +71,7 @@ static struct option long_options[] = {
     { NULL,             0,                  NULL,    0  }
 };
 
-static char short_options[] = "hVtdDv:o:c:s:i:a:p:m:l:";
+static char short_options[] = "hVtdDv:o:w:c:s:i:a:p:m:l:";
 
 static rstatus_t
 nc_daemonize(int dump_core)
@@ -478,16 +479,21 @@ nc_pre_run(struct instance *nci)
 {
     rstatus_t status;
 
-    status = log_init(nci->log_level, nci->log_filename);
-    if (status != NC_OK) {
-        return status;
-    }
+    // status = log_init(nci);
+    // if (status != NC_OK) {
+    //     return status;
+    // }
 
     if (daemonize) {
         status = nc_daemonize(1);
         if (status != NC_OK) {
             return status;
         }
+    }
+
+    status = log_init(nci);
+    if (status != NC_OK) {
+        return status;
     }
 
     nci->pid = getpid();
@@ -580,6 +586,7 @@ main(int argc, char **argv)
     }
 
     status = nc_pre_run(&nci);
+
     if (status != NC_OK) {
         nc_post_run(&nci);
         exit(1);

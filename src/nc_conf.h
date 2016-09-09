@@ -56,6 +56,8 @@
 #define CONF_DEFAULT_KETAMA_PORT             11211
 #define CONF_DEFAULT_REDIS_MSG_LIMIT         64 * 1024
 #define CONF_DEFAULT_WHITELIST_INTERVAL      10
+#define CONF_DEFAULT_SLOWLOG                 false
+#define CONF_DEFAULT_SLOWLOG_SLOWER_THAN     50
 
 struct conf_listen {
     struct string   pname;   /* listen: as "name:port" */
@@ -100,6 +102,8 @@ struct conf_pool {
     int                whitelist_interval;
     struct array       server;                /* servers: conf_server[] */
     unsigned           valid:1;               /* valid? */
+    int                slowlog;               /* slowlog? */
+    int                slowlog_slower_than;   /* slowlog overtime setting */
 };
 
 struct conf {

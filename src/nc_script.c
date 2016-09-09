@@ -158,6 +158,9 @@ ffi_server_new(struct server_pool *pool, char *name, char *id, char *ip, int por
     s->next_retry = 0LL;
     s->failure_count = 0;
 
+    s->auto_ban_flag = false;
+    s->lift_ban_time = 0LL;
+
     string_deinit(&address);
 
     return s;
@@ -203,6 +206,9 @@ ffi_server_update_addr(struct server *s, char *name, char *ip, int port)
 
     s->next_retry = 0LL;
     s->failure_count = 0;
+
+    s->auto_ban_flag = false;
+    s->lift_ban_time = 0LL;
 
     string_deinit(&address);
 }
