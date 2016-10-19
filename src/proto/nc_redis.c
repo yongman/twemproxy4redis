@@ -2965,7 +2965,7 @@ redis_routing(struct context *ctx, struct server_pool *pool,
                 if (server->lift_ban_time <= now) {
                     log_warn("'%.*s'(write) ever disconnected, don't cost ban period, maybe write failed!", server->pname.len, server->pname.data);
                 } else {
-                    log_warn("'%.*s'(write) ever disconnected, cost ban period, reset ban info!", server->pname.len, server->pname.data);
+                    log_warn("'%.*s'(write) ever disconnected, cost ban period, pick up it!", server->pname.len, server->pname.data);
                     server->auto_ban_flag = false;
                     server->lift_ban_time = 0LL;
                 }
@@ -2975,14 +2975,9 @@ redis_routing(struct context *ctx, struct server_pool *pool,
             struct array *slaves;
             struct array *live_slaves;
             struct server **ps;
+            struct server *live_server = NULL;
             int count;
             int index;
-
-            live_slaves = array_create(4, sizeof(struct server *));
-            if (live_slaves == NULL) {
-                log_warn("select unban server, array_init failed!");
-                return NULL;
-            }
 
             for (i = 0; i < NC_MAXTAGNUM; i++) {
                 slaves = &pool->slots[idx]->tagged_servers[i];
@@ -2990,55 +2985,68 @@ redis_routing(struct context *ctx, struct server_pool *pool,
                     log_warn("no accessible tagged_servers found in slot %d", idx);
                     return NULL;
                 }
-                count = array_n(slaves);
-                server = NULL;
 
+                index = 0;
+                count = array_n(slaves);
                 if (count == 0) {
                     continue;
                 }
 
-                index = count - 1;
-                while (index >= 0) {
-                    server = *(struct server**)array_get(slaves, index);
-                    index--;
-                    if (server->auto_ban_flag) {
-                        if (server->lift_ban_time > now) {
+                live_slaves = array_create(10, sizeof(struct server *));
+                if (live_slaves == NULL) {
+                    log_warn("array_create failed!");
+                    return NULL;
+                }
+
+                while (index < count) {
+                    live_server = *(struct server**)array_get(slaves, index);
+                    index++;
+                    if (live_server == NULL) {
+                        log_warn("get server failed from tagged_servers");
+                        continue;
+                    }
+
+                    if (live_server->auto_ban_flag) {
+                        if (live_server->lift_ban_time > now) {
                             log_warn("'%.*s'(read) ever disconnected, don't cost ban period, skip this slave!", server->pname.len, server->pname.data);
                             continue;
                         } else {
                             log_warn("'%.*s'(read) ever disconnected, cost ban period, pick up it to live slaves!", server->pname.len, server->pname.data);
-                            server->auto_ban_flag = false;
-                            server->lift_ban_time = 0LL;
+                            live_server->auto_ban_flag = false;
+                            live_server->lift_ban_time = 0LL;
                             ps = array_push(live_slaves);
-                            *ps = server;
+                            *ps = live_server;
                         }
                     } else {
-                        server->auto_ban_flag = false;
-                        server->lift_ban_time = 0LL;
+                        live_server->auto_ban_flag = false;
+                        live_server->lift_ban_time = 0LL;
                         ps = array_push(live_slaves);
-                        *ps = server;
+                        *ps = live_server;
                     }
                 }
 
                 if (array_n(live_slaves) == 0) {
-                    server = NULL;
+                    live_server = NULL;
+                    array_destroy(live_slaves);
                     continue;
                 } 
                 n = random() % array_n(live_slaves);
                 server = *(struct server**)array_get(live_slaves, n);
-                array_null(live_slaves);
-                array_deinit(live_slaves);
+                live_slaves->nelem = 0;
+                array_destroy(live_slaves);
                 break;
             }
 
             if (server == NULL) {
                 log_warn("all slaves are banned, random one from local region!");
                 slaves = &pool->slots[idx]->tagged_servers[0];
+                if (slaves == NULL) {
+                    log_warn("no accessible tagged_servers found in slot %d", idx);
+                    return NULL;
+                }
                 n = random() % array_n(slaves);
                 server = *(struct server**)array_get(slaves, n);
-            }
-
-            array_destroy(live_slaves);
+            } 
         }
         if (server == NULL) {
             log_debug(LOG_WARN, "no accessible server found in slot %d", idx);
