@@ -3008,10 +3008,10 @@ redis_routing(struct context *ctx, struct server_pool *pool,
 
                     if (live_server->auto_ban_flag) {
                         if (live_server->lift_ban_time > now) {
-                            log_warn("'%.*s'(read) ever disconnected, don't cost ban period, skip this slave!", server->pname.len, server->pname.data);
+                            log_warn("'%.*s'(read) ever disconnected, don't cost ban period, skip this slave!", live_server->pname.len, live_server->pname.data);
                             continue;
                         } else {
-                            log_warn("'%.*s'(read) ever disconnected, cost ban period, pick up it to live slaves!", server->pname.len, server->pname.data);
+                            log_warn("'%.*s'(read) ever disconnected, cost ban period, pick up it to live slaves!", live_server->pname.len, live_server->pname.data);
                             live_server->auto_ban_flag = false;
                             live_server->lift_ban_time = 0LL;
                             ps = array_push(live_slaves);
@@ -3040,7 +3040,7 @@ redis_routing(struct context *ctx, struct server_pool *pool,
             if (server == NULL) {
                 log_warn("all slaves are banned, random one from local region!");
                 slaves = &pool->slots[idx]->tagged_servers[0];
-                if (slaves == NULL) {
+                if (slaves == NULL || !array_n(slaves)) {
                     log_warn("no accessible tagged_servers found in slot %d", idx);
                     return NULL;
                 }
