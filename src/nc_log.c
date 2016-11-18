@@ -35,6 +35,11 @@ wflog_init() {
     char *index;
     int len = 0;
 
+    if (l->name == NULL || !strlen(l->name)) {
+        l->wf_name = NULL;
+        return;
+    } 
+
     index = l->name;
     while (*index != '\0') {
         index++;
