@@ -19,6 +19,9 @@
 #include <nc_server.h>
 #include <netdb.h>
 
+static void
+check_out_slowlog(struct context *ctx, struct server_pool *sp, struct msg *msg);
+
 struct msg *
 rsp_get(struct conn *conn)
 {
@@ -258,7 +261,7 @@ rsp_forward(struct context *ctx, struct conn *s_conn, struct msg *msg)
             now = 0;
         } else {
             pmsg->slowlog_etime = now;
-            check_out_slowlog(sp, pmsg);
+            check_out_slowlog(ctx, sp, pmsg);
         }
     }
 
@@ -379,8 +382,8 @@ rsp_send_done(struct context *ctx, struct conn *conn, struct msg *msg)
     req_put(pmsg);
 }
 
-void 
-check_out_slowlog(struct server_pool *sp, struct msg *msg) {
+static void
+check_out_slowlog(struct context *ctx, struct server_pool *sp, struct msg *msg) {
 
     struct msg *pmsg; /* peer message (response) */
     struct conn *c_conn;
@@ -395,6 +398,26 @@ check_out_slowlog(struct server_pool *sp, struct msg *msg) {
 
     ASSERT(sp->slowlog);
     cost_time = msg->slowlog_etime - msg->slowlog_stime;
+
+    // update stats
+    if (cost_time > 10) {
+        stats_pool_incr(ctx, sp, request_gt_10ms);
+        if (cost_time > 20) {
+            stats_pool_incr(ctx, sp, request_gt_20ms);
+            if (cost_time > 50) {
+                stats_pool_incr(ctx, sp, request_gt_50ms);
+                if (cost_time > 100) {
+                    stats_pool_incr(ctx, sp, request_gt_100ms);
+                    if (cost_time > 200) {
+                        stats_pool_incr(ctx, sp, request_gt_200ms);
+                        if (cost_time > 500) {
+                            stats_pool_incr(ctx, sp, request_gt_500ms);
+                        }
+                    }
+                }
+            }
+        }
+    }
     if (cost_time < sp-> slowlog_slower_than) {
         return;
     }

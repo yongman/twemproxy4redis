@@ -33,6 +33,12 @@
     ACTION( servers_update_at,      STATS_TIMESTAMP,    "timestamp when servers updated")                           \
     ACTION( slots_update_at,        STATS_TIMESTAMP,    "timestamp when slots updated")                             \
     ACTION( total_requests,         STATS_COUNTER,      "# total requests received")                                \
+    ACTION( request_gt_10ms,        STATS_COUNTER,      "# requests more than 10ms")                                \
+    ACTION( request_gt_20ms,        STATS_COUNTER,      "# requests more than 20ms")                                \
+    ACTION( request_gt_50ms,        STATS_COUNTER,      "# requests more than 50ms")                                \
+    ACTION( request_gt_100ms,       STATS_COUNTER,      "# requests more than 100ms")                               \
+    ACTION( request_gt_200ms,       STATS_COUNTER,      "# requests more than 200ms")                               \
+    ACTION( request_gt_500ms,       STATS_COUNTER,      "# requests more than 500ms")                               \
     /* Redis */                                                                                                     \
     ACTION( redis_req_get,          STATS_COUNTER,      "# get requests")                                           \
     ACTION( redis_req_set,          STATS_COUNTER,      "# set requests")                                           \

@@ -2,7 +2,7 @@
 m4_define([NC_MAJOR], 0)
 m4_define([NC_MINOR], 4)
 m4_define([NC_PATCH], 0)
-m4_define([NC_DATE], 2015.09.07)
+m4_define([NC_DATE], 2016.11.22)
 m4_define([NC_BUGS], [manj@cs.stanford.edu])
 
 # Initialize autoconf

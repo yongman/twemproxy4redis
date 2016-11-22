@@ -313,5 +313,4 @@ void rsp_recv_done(struct context *ctx, struct conn *conn, struct msg *msg, stru
 struct msg *rsp_send_next(struct context *ctx, struct conn *conn);
 void rsp_send_done(struct context *ctx, struct conn *conn, struct msg *msg);
 
-void check_out_slowlog(struct server_pool *sp, struct msg *msg);
 #endif
