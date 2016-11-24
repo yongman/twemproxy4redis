@@ -1,6 +1,7 @@
 package.path = package.path .. ";lua/?.lua;../?.lua"
 
 local idcmap = require("idcmap")
+local logic_idcmap = require("logic_idcmap")
 local ffi = require("ffi")
 local C = ffi.C
 
@@ -16,7 +17,8 @@ ffi.cdef[[
       rstatus_t ffi_server_disconnect(struct server *server);
       struct server* ffi_server_new(
          struct server_pool *pool, const char *name, const char *id, const char *ip, int port);
-      void ffi_server_update_addr(struct server *p, const char *name, const char *ip, int port);
+      void ffi_server_update_addr(struct server *server, const char *name, const char *ip, int port);
+      void ffi_server_set_local_idc(struct server *server, int local_idc);
 ]]
 
 local zone = C.ffi_pool_get_zone(__pool)
@@ -48,6 +50,7 @@ function _M.new(self, config)
    if s.raw == nil then
        error("new: create server object failed.")
    end
+   C.ffi_server_set_local_idc(s.raw, s.local_idc);
    return s
 end
 
@@ -69,6 +72,12 @@ function _M.update_config(self, config)
       self.tag_idx = _M.zone_index["$master"]
    else
       self.tag_idx = _M.zone_index[self.zone] or -1
+   end
+
+   if logic_idcmap[_M.local_zone] == self.region then
+       self.local_idc = 1
+   else
+       self.local_idc = 0
    end
 end
 

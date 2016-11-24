@@ -161,9 +161,18 @@ ffi_server_new(struct server_pool *pool, char *name, char *id, char *ip, int por
     s->auto_ban_flag = false;
     s->lift_ban_time = 0LL;
 
+    s->local_idc = 1;
+
     string_deinit(&address);
 
     return s;
+}
+
+void
+ffi_server_set_local_idc(struct server *s, int local_idc)
+{
+    log_debug(LOG_DEBUG, "set server %.*s local_idc %d", s->name.len, s->name.data, local_idc);
+    s->local_idc = local_idc;
 }
 
 void

@@ -388,6 +388,7 @@ check_out_slowlog(struct context *ctx, struct server_pool *sp, struct msg *msg) 
     struct msg *pmsg; /* peer message (response) */
     struct conn *c_conn;
     struct conn *s_conn;
+    struct server *server;
     int64_t cost_time;
     int client_fd;
     int server_fd;
@@ -399,29 +400,6 @@ check_out_slowlog(struct context *ctx, struct server_pool *sp, struct msg *msg) 
     ASSERT(sp->slowlog);
     cost_time = msg->slowlog_etime - msg->slowlog_stime;
 
-    // update stats
-    if (cost_time > 10) {
-        stats_pool_incr(ctx, sp, request_gt_10ms);
-        if (cost_time > 20) {
-            stats_pool_incr(ctx, sp, request_gt_20ms);
-            if (cost_time > 50) {
-                stats_pool_incr(ctx, sp, request_gt_50ms);
-                if (cost_time > 100) {
-                    stats_pool_incr(ctx, sp, request_gt_100ms);
-                    if (cost_time > 200) {
-                        stats_pool_incr(ctx, sp, request_gt_200ms);
-                        if (cost_time > 500) {
-                            stats_pool_incr(ctx, sp, request_gt_500ms);
-                        }
-                    }
-                }
-            }
-        }
-    }
-    if (cost_time < sp-> slowlog_slower_than) {
-        return;
-    }
-
     pmsg = msg->peer;
 
     ASSERT(msg->done == 1);
@@ -429,6 +407,56 @@ check_out_slowlog(struct context *ctx, struct server_pool *sp, struct msg *msg) 
 
     c_conn = msg->owner;
     s_conn = pmsg->owner;
+    if (s_conn) {
+        server = s_conn->owner;
+        if (server != NULL) {
+            if (server->local_idc == 0) {
+                // update cross stats
+                if (cost_time > 10) {
+                    stats_pool_incr(ctx, sp, xrequest_gt_10ms);
+                    if (cost_time > 20) {
+                        stats_pool_incr(ctx, sp, xrequest_gt_20ms);
+                        if (cost_time > 50) {
+                            stats_pool_incr(ctx, sp, xrequest_gt_50ms);
+                            if (cost_time > 100) {
+                                stats_pool_incr(ctx, sp, xrequest_gt_100ms);
+                                if (cost_time > 200) {
+                                    stats_pool_incr(ctx, sp, xrequest_gt_200ms);
+                                    if (cost_time > 500) {
+                                        stats_pool_incr(ctx, sp, xrequest_gt_500ms);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            } else{
+                // update local stats
+                if (cost_time > 10) {
+                    stats_pool_incr(ctx, sp, lrequest_gt_10ms);
+                    if (cost_time > 20) {
+                        stats_pool_incr(ctx, sp, lrequest_gt_20ms);
+                        if (cost_time > 50) {
+                            stats_pool_incr(ctx, sp, lrequest_gt_50ms);
+                            if (cost_time > 100) {
+                                stats_pool_incr(ctx, sp, lrequest_gt_100ms);
+                                if (cost_time > 200) {
+                                    stats_pool_incr(ctx, sp, lrequest_gt_200ms);
+                                    if (cost_time > 500) {
+                                        stats_pool_incr(ctx, sp, lrequest_gt_500ms);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if (cost_time < sp-> slowlog_slower_than) {
+        return;
+    }
 
     client_fd = c_conn == NULL ? 0 : c_conn->sd;
     server_fd = s_conn == NULL ? 0 : s_conn->sd;

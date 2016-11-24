@@ -37,6 +37,7 @@ void ffi_server_update_done(struct server_pool *pool);
 void ffi_slots_update_done(struct server_pool *pool);
 
 void ffi_server_hashkey_set(struct server *server, const char *name, int nlen);
+void ffi_server_set_local_idc(struct server *s, int local_idc);
 
 void slots_debug(struct server_pool *pool, int level);
 

@@ -91,6 +91,8 @@ struct server {
 
     bool               auto_ban_flag; /* if disconnect, set true */
     int64_t            lift_ban_time; /* if set auto_ban_flag , lift banne time */
+
+    unsigned           local_idc:1;   /* flag if backend server in local idc */
 };
 
 #define NC_MAXTAGNUM 10
