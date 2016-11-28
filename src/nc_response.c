@@ -382,9 +382,12 @@ rsp_send_done(struct context *ctx, struct conn *conn, struct msg *msg)
     req_put(pmsg);
 }
 
+#define MAX_TIMEOUT_MS  600000
+
 static void
 check_out_slowlog(struct context *ctx, struct server_pool *sp, struct msg *msg) {
 
+    // max_cost_time 10min
     struct msg *pmsg; /* peer message (response) */
     struct conn *c_conn;
     struct conn *s_conn;
@@ -412,43 +415,39 @@ check_out_slowlog(struct context *ctx, struct server_pool *sp, struct msg *msg) 
         if (server != NULL) {
             if (server->local_idc == 0) {
                 // update cross stats
-                if (cost_time > 10) {
-                    stats_pool_incr(ctx, sp, xrequest_gt_10ms);
-                    if (cost_time > 20) {
+                switch (cost_time) {
+                    case 501 ... MAX_TIMEOUT_MS:
+                        stats_pool_incr(ctx, sp, xrequest_gt_500ms);
+                    case 201 ... 500:
+                        stats_pool_incr(ctx, sp, xrequest_gt_200ms);
+                    case 101 ... 200:
+                        stats_pool_incr(ctx, sp, xrequest_gt_100ms);
+                    case 51 ... 100:
+                        stats_pool_incr(ctx, sp, xrequest_gt_50ms);
+                    case 21 ... 50:
                         stats_pool_incr(ctx, sp, xrequest_gt_20ms);
-                        if (cost_time > 50) {
-                            stats_pool_incr(ctx, sp, xrequest_gt_50ms);
-                            if (cost_time > 100) {
-                                stats_pool_incr(ctx, sp, xrequest_gt_100ms);
-                                if (cost_time > 200) {
-                                    stats_pool_incr(ctx, sp, xrequest_gt_200ms);
-                                    if (cost_time > 500) {
-                                        stats_pool_incr(ctx, sp, xrequest_gt_500ms);
-                                    }
-                                }
-                            }
-                        }
-                    }
+                    case 11 ... 20:
+                        stats_pool_incr(ctx, sp, xrequest_gt_10ms);
+                    default:
+                        break;
                 }
             } else{
                 // update local stats
-                if (cost_time > 10) {
-                    stats_pool_incr(ctx, sp, lrequest_gt_10ms);
-                    if (cost_time > 20) {
+                switch (cost_time) {
+                    case 501 ... MAX_TIMEOUT_MS:
+                        stats_pool_incr(ctx, sp, lrequest_gt_500ms);
+                    case 201 ... 500:
+                        stats_pool_incr(ctx, sp, lrequest_gt_200ms);
+                    case 101 ... 200:
+                        stats_pool_incr(ctx, sp, lrequest_gt_100ms);
+                    case 51 ... 100:
+                        stats_pool_incr(ctx, sp, lrequest_gt_50ms);
+                    case 21 ... 50:
                         stats_pool_incr(ctx, sp, lrequest_gt_20ms);
-                        if (cost_time > 50) {
-                            stats_pool_incr(ctx, sp, lrequest_gt_50ms);
-                            if (cost_time > 100) {
-                                stats_pool_incr(ctx, sp, lrequest_gt_100ms);
-                                if (cost_time > 200) {
-                                    stats_pool_incr(ctx, sp, lrequest_gt_200ms);
-                                    if (cost_time > 500) {
-                                        stats_pool_incr(ctx, sp, lrequest_gt_500ms);
-                                    }
-                                }
-                            }
-                        }
-                    }
+                    case 11 ... 20:
+                        stats_pool_incr(ctx, sp, lrequest_gt_10ms);
+                    default:
+                        break;
                 }
             }
         }
