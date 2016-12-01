@@ -399,6 +399,9 @@ check_out_slowlog(struct context *ctx, struct server_pool *sp, struct msg *msg) 
     char *s_host;
     static char client_host[NI_MAXHOST + NI_MAXSERV];
     static char server_host[NI_MAXHOST + NI_MAXSERV];
+    struct string *req_type;
+    uint32_t req_len, rsp_len; 
+    struct keypos *kpos;
 
     ASSERT(sp->slowlog);
     cost_time = msg->slowlog_etime - msg->slowlog_stime;
@@ -465,8 +468,16 @@ check_out_slowlog(struct context *ctx, struct server_pool *sp, struct msg *msg) 
     s_host = nc_unresolve_peer_desc(server_fd);
     memcpy(server_host, s_host, NI_MAXHOST + NI_MAXSERV);
 
-    log_slow("request_msg_id=%"PRIu64", client_address=%s, server_address=%s, start_time=%"PRIu64", cost_time=%"PRIu64"ms, fragment_num=%"PRIu32"",
-        msg->id, client_host, server_host, msg->slowlog_stime, cost_time, msg->nfrag);  
+    req_type = msg_type_string(msg->type);
+    req_len = msg->mlen;
+    rsp_len = pmsg->mlen;
+    kpos = array_get(msg->keys, 0);
+    if (kpos->end != NULL) {
+        *(kpos->end) = '\0';
+    }
+    log_slow("request_msg_id=%"PRIu64", client_address=%s, server_address=%s, cost_time=%"PRIu64"ms, fragment_id=%"PRIu64", request_type=%s, request_len %"PRIu32", response_len %"PRIu32", key='%s'",
+        msg->id, client_host, server_host, cost_time ,msg->frag_id, req_type->data, req_len, rsp_len, kpos->start);  
+
 }
 
 
