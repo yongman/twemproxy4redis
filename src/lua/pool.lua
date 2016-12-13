@@ -51,9 +51,16 @@ function _M.fetch_server(self, config)
       s = server:new(config)
    else
       s = table.remove(self._se_pool, 1)
-      -- update config
-      s:update_config(config)
-      s:update_raw();
+      -- check this server safe to reuse
+      if s:safe_reuse() then
+        -- update config
+        s:update_config(config)
+        s:update_raw()
+      else
+        -- recycle the server again and alloc a new one
+        self.put_server(s)
+        s = server:new()
+      end
    end
 
    return s

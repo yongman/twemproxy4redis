@@ -12,6 +12,7 @@ void ffi_server_table_delete(struct server_pool *pool, const char *name);
 
 struct server* ffi_server_new(struct server_pool *pool, char *name, char *id, char *ip, int port);
 void ffi_server_update_addr(struct server *s, char *name, char *ip, int port);
+bool ffi_server_safe_reuse(struct server *server);
 
 rstatus_t ffi_server_connect(struct server *server);
 rstatus_t ffi_server_disconnect(struct server *server);

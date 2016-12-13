@@ -303,6 +303,11 @@ ffi_pool_clear_servers(struct server_pool *pool) {
     pool->ffi_server.nelem = 0;
 }
 
+bool
+ffi_server_safe_reuse(struct server *server) {
+    return 0 == server->ns_conn_q;
+}
+
 void
 ffi_pool_add_server(struct server_pool *pool, struct server *server) {
     struct server **s;

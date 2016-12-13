@@ -19,6 +19,7 @@ ffi.cdef[[
          struct server_pool *pool, const char *name, const char *id, const char *ip, int port);
       void ffi_server_update_addr(struct server *server, const char *name, const char *ip, int port);
       void ffi_server_set_local_idc(struct server *server, int local_idc);
+      void ffi_server_safe_reuse(struct server *server);
 ]]
 
 local zone = C.ffi_pool_get_zone(__pool)
@@ -100,6 +101,10 @@ end
 
 function _M.is_slave(self)
    return self.role == "slave"
+end
+
+function _M.safe_reuse(self)
+   return C.ffi_server_safe_reuse(self.raw)
 end
 
 return _M
