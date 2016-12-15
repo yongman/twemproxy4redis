@@ -231,12 +231,15 @@ log_thread_loop(void* loop)
     struct logger *l = &logger;
     char msg[1];
     size_t size;
-    ssize_t writen; 
+    ssize_t writen;
+    bool fsync_fd = false;
+    bool fsync_wfd = false;
 
     for(;;){
         if (read(l->notify_fd[0], msg, 1) != 1) {
             continue;
         }
+        pthread_mutex_lock(&(l->log_mutex));
         if (l->log_buf_pos != l->log_buf_last) {
             if (l->log_buf_last < l->log_buf_pos) {
                 size = LOG_BUF_SIZE - l->log_buf_pos;
@@ -264,7 +267,7 @@ log_thread_loop(void* loop)
                 l->log_buf_pos += (size_t)writen;
                 l->log_buf_pos = l->log_buf_pos % LOG_BUF_SIZE;
             }
-            fsync(l->fd);
+            fsync_fd = true;
         }
         if (l->wflog_buf_pos != l->wflog_buf_last) {
             if (l->wflog_buf_last < l->wflog_buf_pos) {
@@ -293,6 +296,16 @@ log_thread_loop(void* loop)
                 l->wflog_buf_pos += (size_t)writen;
                 l->wflog_buf_pos = l->wflog_buf_pos % LOG_BUF_SIZE;
             }
+            fsync_wfd = true;
+        }
+        pthread_mutex_unlock(&(l->log_mutex));
+
+        if (fsync_fd) {
+            fsync_fd = false;
+            fsync(l->fd);
+        }
+        if (fsync_wfd) {
+            fsync_wfd = false;
             fsync(l->wfd);
         }
     }
