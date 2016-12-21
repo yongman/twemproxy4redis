@@ -29,8 +29,8 @@ static int status;
 static char tem_buf[8 * LOG_MAX_LEN];
 static char wf_name[LOG_FILENAME_LEN];
 
-void
-wflog_init() {
+static void
+wflog_init(void) {
     struct logger *l = &logger;
     char *index;
     int len = 0;
@@ -232,14 +232,11 @@ log_thread_loop(void* loop)
     char msg[1];
     size_t size;
     ssize_t writen;
-    bool fsync_fd = false;
-    bool fsync_wfd = false;
 
     for(;;){
         if (read(l->notify_fd[0], msg, 1) != 1) {
             continue;
         }
-        pthread_mutex_lock(&(l->log_mutex));
         if (l->log_buf_pos != l->log_buf_last) {
             if (l->log_buf_last < l->log_buf_pos) {
                 size = LOG_BUF_SIZE - l->log_buf_pos;
@@ -267,7 +264,6 @@ log_thread_loop(void* loop)
                 l->log_buf_pos += (size_t)writen;
                 l->log_buf_pos = l->log_buf_pos % LOG_BUF_SIZE;
             }
-            fsync_fd = true;
         }
         if (l->wflog_buf_pos != l->wflog_buf_last) {
             if (l->wflog_buf_last < l->wflog_buf_pos) {
@@ -296,17 +292,6 @@ log_thread_loop(void* loop)
                 l->wflog_buf_pos += (size_t)writen;
                 l->wflog_buf_pos = l->wflog_buf_pos % LOG_BUF_SIZE;
             }
-            fsync_wfd = true;
-        }
-        pthread_mutex_unlock(&(l->log_mutex));
-
-        if (fsync_fd) {
-            fsync_fd = false;
-            fsync(l->fd);
-        }
-        if (fsync_wfd) {
-            fsync_wfd = false;
-            fsync(l->wfd);
         }
     }
 }
@@ -434,7 +419,7 @@ _log_write_logbuf(char *dest, size_t *pos ,size_t *last, char *buf , int len)
 }
 
 void
-_log_write_buf(int level, char *buf, int len, bool lock)
+_log_write_buf(int level, char *buf, int len)
 {
     if (len <= 0 && len >= LOG_MAX_LEN) {
         return;
@@ -444,9 +429,7 @@ _log_write_buf(int level, char *buf, int len, bool lock)
     char *dest;
     size_t *pos;
     size_t *last;
-    if (lock) {
-        pthread_mutex_lock(&(l->log_mutex));
-    }
+    pthread_mutex_lock(&(l->log_mutex));
     if (_log_switch(level)) {
         dest = l->wflog_buf;
         pos = &(l->wflog_buf_pos);
@@ -463,9 +446,7 @@ _log_write_buf(int level, char *buf, int len, bool lock)
     if (write(l->notify_fd[1], "1", 1) != 1) {
         log_stderr("notify log thread failed");
     }
-    if (lock) {
-        pthread_mutex_unlock(&(l->log_mutex));
-    }
+    pthread_mutex_unlock(&(l->log_mutex));
 }
 
 void
@@ -497,7 +478,7 @@ _log(int level, const char *file, int line, int panic, const char *fmt, ...)
 
     buf[len++] = '\n';
 
-    _log_write_buf(level, buf, len, true);
+    _log_write_buf(level, buf, len);
 
     if (panic) {
         abort();
@@ -588,9 +569,9 @@ _log_hexdump(int level, const char *file, int line, char *data, int datalen,
         off += 16;
     }
 
-    _log_write_buf(level, buf, len, true);
+    _log_write_buf(level, buf, len);
     if (len >= size - 1) {
-        _log_write_buf(level, "\n", 1, true);
+        _log_write_buf(level, "\n", 1);
     }
 }
 
@@ -598,13 +579,15 @@ void
 _log_safe(int level, const char *fmt, ...)
 {
     struct logger *l = &logger;
-    int len, size;
+    int len, size, errno_save;
     char *buf = tem_buf;
     va_list args;
+    ssize_t n;
 
     if (l->fd < 0) {
         return;
     }
+    errno_save = errno;
     len = 0;            /* length of output buffer */
     size = LOG_MAX_LEN; /* size of output buffer */
 
@@ -617,7 +600,12 @@ _log_safe(int level, const char *fmt, ...)
 
     buf[len++] = '\n';
 
-    _log_write_buf(level, buf, len, false);
+	n = nc_write(l->fd, buf, len);
+    if (n < 0) {
+        l->nerror++;
+    }
+
+    errno = errno_save;
 }
 
 void
