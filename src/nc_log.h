@@ -155,6 +155,6 @@ void _log_hexdump(int level, const char *file, int line, char *data, int datalen
 void _log_level(int level, char *buf , int *pos);
 int _log_switch(int level);
 int _log_write_logbuf(char *dest, size_t *pos ,size_t *last, char *buf , int len);
-void _log_write_buf(int level, char *buf , int len);
+void _log_write_buf(int level, char *buf , int len, bool lock);
 
 #endif

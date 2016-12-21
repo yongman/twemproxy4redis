@@ -38,7 +38,7 @@ wflog_init() {
     if (l->name == NULL || !strlen(l->name)) {
         l->wf_name = NULL;
         return;
-    } 
+    }
 
     index = l->name;
     while (*index != '\0') {
@@ -75,7 +75,7 @@ log_init(struct instance *nci)
             return -1;
         }
     }
-    
+
     if (l->wf_name == NULL || !strlen(l->wf_name)) {
         l->wfd = STDERR_FILENO;
     } else {
@@ -231,7 +231,7 @@ log_thread_loop(void* loop)
     struct logger *l = &logger;
     char msg[1];
     size_t size;
-    ssize_t writen; 
+    ssize_t writen;
 
     for(;;){
         if (read(l->notify_fd[0], msg, 1) != 1) {
@@ -370,7 +370,7 @@ _log_level(int level, char *buf , int *pos)
 }
 
 int
-_log_switch(int level) 
+_log_switch(int level)
 {
     if (level <= LOG_WARN)
         return LOG_WF;
@@ -421,7 +421,7 @@ _log_write_logbuf(char *dest, size_t *pos ,size_t *last, char *buf , int len)
 }
 
 void
-_log_write_buf(int level, char *buf, int len)
+_log_write_buf(int level, char *buf, int len, bool lock)
 {
     if (len <= 0 && len >= LOG_MAX_LEN) {
         return;
@@ -431,8 +431,9 @@ _log_write_buf(int level, char *buf, int len)
     char *dest;
     size_t *pos;
     size_t *last;
-
-    pthread_mutex_lock(&(l->log_mutex));
+    if (lock) {
+        pthread_mutex_lock(&(l->log_mutex));
+    }
     if (_log_switch(level)) {
         dest = l->wflog_buf;
         pos = &(l->wflog_buf_pos);
@@ -449,7 +450,9 @@ _log_write_buf(int level, char *buf, int len)
     if (write(l->notify_fd[1], "1", 1) != 1) {
         log_stderr("notify log thread failed");
     }
-    pthread_mutex_unlock(&(l->log_mutex));
+    if (lock) {
+        pthread_mutex_unlock(&(l->log_mutex));
+    }
 }
 
 void
@@ -481,7 +484,7 @@ _log(int level, const char *file, int line, int panic, const char *fmt, ...)
 
     buf[len++] = '\n';
 
-    _log_write_buf(level, buf, len);
+    _log_write_buf(level, buf, len, true);
 
     if (panic) {
         abort();
@@ -572,9 +575,9 @@ _log_hexdump(int level, const char *file, int line, char *data, int datalen,
         off += 16;
     }
 
-    _log_write_buf(level, buf, len);
+    _log_write_buf(level, buf, len, true);
     if (len >= size - 1) {
-        _log_write_buf(level, "\n", 1);
+        _log_write_buf(level, "\n", 1, true);
     }
 }
 
@@ -601,7 +604,7 @@ _log_safe(int level, const char *fmt, ...)
 
     buf[len++] = '\n';
 
-    _log_write_buf(level, buf, len);
+    _log_write_buf(level, buf, len, false);
 }
 
 void
