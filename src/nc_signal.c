@@ -84,9 +84,13 @@ signal_handler(int signo)
 
     switch (signo) {
     case SIGUSR1:
+        actionstr = ", up logbuf exchange period";
+        action = logbuf_exchange_period_up;
         break;
 
     case SIGUSR2:
+        actionstr = ", down logbuf exchange period";
+        action = logbuf_exchange_period_down;
         break;
 
     case SIGTTIN:
