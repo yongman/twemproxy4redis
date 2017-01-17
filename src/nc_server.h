@@ -169,6 +169,7 @@ struct server_pool {
     struct array       ffi_server;
     struct replicaset  *ffi_slots[REDIS_CLUSTER_SLOTS];
     int                pool_tick_count;
+    unsigned           tcpkeepalive:1;       /* tcpkeepalive? */
 };
 
 void server_ref(struct conn *conn, void *owner);

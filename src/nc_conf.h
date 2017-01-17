@@ -58,6 +58,7 @@
 #define CONF_DEFAULT_WHITELIST_INTERVAL      10
 #define CONF_DEFAULT_SLOWLOG                 false
 #define CONF_DEFAULT_SLOWLOG_SLOWER_THAN     50
+#define CONF_DEFAULT_TCPKEEPALIVE            true
 
 struct conf_listen {
     struct string   pname;   /* listen: as "name:port" */
@@ -86,6 +87,7 @@ struct conf_pool {
     int                timeout;               /* timeout: */
     int                backlog;               /* backlog: */
     int                client_connections;    /* client_connections: */
+    int                tcpkeepalive;          /* tcpkeepalive: */
     int                redis;                 /* redis: */
     int                rediscluster;          /* rediscluster */
     struct string      redis_auth;            /* redis auth password */
