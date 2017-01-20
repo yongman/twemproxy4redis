@@ -91,7 +91,7 @@ static struct command conf_commands[] = {
       offsetof(struct conf_pool, tcpkeepintval) },
 
     { string("tcpkeepcnt"),
-      conf_set_bool,
+      conf_set_num,
       offsetof(struct conf_pool, tcpkeepcnt) },
 
     { string("server_max_nodes"),
