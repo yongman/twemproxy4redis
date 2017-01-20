@@ -135,6 +135,7 @@ struct server_pool {
     int                backlog;              /* listen backlog */
     int                redis_db;             /* redis database to connect to */
     uint32_t           client_connections;   /* maximum # client connection */
+    uint32_t           server_max_nodes;     /* maximun backend nodes */
     uint32_t           server_connections;   /* maximum # server connection */
     int64_t            server_retry_timeout; /* server retry timeout in usec */
     uint32_t           server_failure_limit; /* server failure limit */
@@ -170,6 +171,9 @@ struct server_pool {
     struct replicaset  *ffi_slots[REDIS_CLUSTER_SLOTS];
     int                pool_tick_count;
     unsigned           tcpkeepalive:1;       /* tcpkeepalive? */
+    int                tcpkeepidle;
+    int                tcpkeepintval;
+    int                tcpkeepcnt;
 };
 
 void server_ref(struct conn *conn, void *owner);

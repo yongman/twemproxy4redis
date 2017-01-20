@@ -59,6 +59,10 @@
 #define CONF_DEFAULT_SLOWLOG                 false
 #define CONF_DEFAULT_SLOWLOG_SLOWER_THAN     50
 #define CONF_DEFAULT_TCPKEEPALIVE            true
+#define CONF_DEFAULT_TCPKEEPIDLE             60
+#define CONF_DEFAULT_TCPKEEPINTVAL           10
+#define CONF_DEFAULT_TCPKEEPCNT              5
+#define CONF_DEFAULT_SERVER_MAX_NODES        1000
 
 struct conf_listen {
     struct string   pname;   /* listen: as "name:port" */
@@ -88,12 +92,16 @@ struct conf_pool {
     int                backlog;               /* backlog: */
     int                client_connections;    /* client_connections: */
     int                tcpkeepalive;          /* tcpkeepalive: */
+    int                tcpkeepidle;           /* tcpkeepalive idle */
+    int                tcpkeepintval;         /* tcpkeepalive interval */
+    int                tcpkeepcnt;            /* tcpkeepalive count */
     int                redis;                 /* redis: */
     int                rediscluster;          /* rediscluster */
     struct string      redis_auth;            /* redis auth password */
     int                redis_db;              /* redis_db: */
     int                preconnect;            /* preconnect: */
     int                auto_eject_hosts;      /* auto_eject_hosts: */
+    int                server_max_nodes;      /* max backend nodes */
     int                server_connections;    /* server_connections: */
     int                server_retry_timeout;  /* server_retry_timeout: in msec */
     int                server_failure_limit;  /* server_failure_limit: */

@@ -110,10 +110,24 @@ nc_set_linger(int sd, int timeout)
 }
 
 int
-nc_set_tcpkeepalive(int sd)
+nc_set_tcpkeepalive(int sd, int idle, int intval, int count)
 {
-    int val = 1;
-    return setsockopt(sd, SOL_SOCKET, SO_KEEPALIVE, &val, sizeof(val));
+    int ret;
+    int keepalive = 1;
+    ret = setsockopt(sd, SOL_SOCKET, SO_KEEPALIVE, &keepalive, sizeof(keepalive));
+    if (ret < 0) {
+        return ret;
+    }
+    ret = setsockopt(sd, SOL_TCP, TCP_KEEPIDLE, (void*)&idle, sizeof(idle));
+    if (ret < 0) {
+        return ret;
+    }
+    ret = setsockopt(sd, SOL_TCP, TCP_KEEPINTVL, (void *)&intval, sizeof(intval));
+    if (ret < 0) {
+        return ret;
+    }
+    ret = setsockopt(sd, SOL_TCP, TCP_KEEPCNT, (void *)&count, sizeof(count));
+    return ret;
 }
 
 

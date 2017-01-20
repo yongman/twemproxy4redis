@@ -861,7 +861,7 @@ server_pool_each_calc_connections(void *elem, void *data)
     struct server_pool *sp = elem;
     struct context *ctx = data;
 
-    ctx->max_nsconn += sp->server_connections * array_n(&sp->server);
+    ctx->max_nsconn += sp->server_connections * sp->server_max_nodes;
     ctx->max_nsconn += 1; /* pool listening socket */
 
     return NC_OK;
