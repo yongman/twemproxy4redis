@@ -123,8 +123,6 @@ signal_handler(int signo)
         NOT_REACHED();
     }
 
-    log_safe("signal %d (%s) received%s", signo, sig->signame, actionstr);
-
     if (action != NULL) {
         action();
     }

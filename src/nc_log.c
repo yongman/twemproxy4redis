@@ -190,6 +190,7 @@ _log_reopen(void)
     struct logger *l = &logger;
     log_reopen_tag = 0;
 
+    log_safe("signal SIGHUP received, reopening log file");
     if (l->fd != STDERR_FILENO) {
         close(l->fd);
         l->fd = open(l->name, O_WRONLY | O_APPEND | O_CREAT, 0644);
@@ -221,6 +222,7 @@ _log_level_up(void)
     struct logger *l = &logger;
     log_up_tag = 0;
 
+    log_safe("signal SIGTTIN received, up logging level");
     if (l->level < LOG_PVERB) {
         l->level++;
         log_safe("up log level to %d", l->level);
@@ -239,6 +241,7 @@ _log_level_down(void)
     struct logger *l = &logger;
     log_down_tag = 0;
 
+    log_safe("signal SIGTTOU received, down logging level");
     if (l->level > LOG_EMERG) {
         l->level--;
         log_safe("down log level to %d", l->level);
@@ -264,6 +267,7 @@ logbuf_exchange_period_up(void)
 void
 _logbuf_exchange_period_up(void)
 {
+    log_safe("signal SIGUSR1 received, up logbuf exchange period");
     logbuf_intercal_up = 0;
     logbuf_exintercal++;
     logbuf_exintercal = logbuf_exintercal > LOG_EX_MAX_INTERCAL ? LOG_EX_MAX_INTERCAL : logbuf_exintercal;
@@ -279,6 +283,7 @@ logbuf_exchange_period_down(void)
 void
 _logbuf_exchange_period_down(void)
 {
+    log_safe("signal SIGUSR2 received, down logbuf exchange period");
     logbuf_intercal_down = 0;
     logbuf_exintercal--;
     logbuf_exintercal = logbuf_exintercal <= LOG_EX_MIN_INTERCAL ? LOG_EX_MIN_INTERCAL : logbuf_exintercal;
@@ -462,7 +467,6 @@ _log_switch(int level)
         return LOG_ACCESS;
 }
 
-static struct log_buf *log_buffer;
 /*
  * main thread write to logbuffer 
  * other thread also write without mutex
@@ -477,6 +481,7 @@ _log_write_buf(int level, char *buf, size_t len)
     struct logger *l = &logger;
     size_t length;
     size_t max_len;
+    struct log_buf *log_buffer;
 
     
     while(len) {
