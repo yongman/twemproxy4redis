@@ -36,6 +36,8 @@ typedef enum msg_parse_result {
     MSG_PARSE_AGAIN,                      /* incomplete -> parse again */
 } msg_parse_result_t;
 
+#define NC_MULTIBULK_DEPTH               3
+
 #define MSG_TYPE_CODEC(ACTION)                                                                      \
     ACTION( UNKNOWN )                                                                               \
     ACTION( REQ_MC_GET )                       /* memcache retrieval requests */                    \
@@ -161,6 +163,12 @@ typedef enum msg_parse_result {
     ACTION( REQ_REDIS_ZREMRANGEBYLEX )                                                              \
     ACTION( REQ_REDIS_ZREMRANGEBYSCORE )                                                            \
     ACTION( REQ_REDIS_ZUNIONSTORE )                                                                 \
+    ACTION( REQ_REDIS_GEOADD )                                                                      \
+    ACTION( REQ_REDIS_GEOHASH )                                                                     \
+    ACTION( REQ_REDIS_GEOPOS )                                                                      \
+    ACTION( REQ_REDIS_GEODIST )                                                                     \
+    ACTION( REQ_REDIS_GEORADIUS )                                                                   \
+    ACTION( REQ_REDIS_GEORADIUSBYMEMBER )                                                           \
     ACTION( REQ_REDIS_EVAL )                   /* redis requests - eval */                          \
     ACTION( REQ_REDIS_EVALSHA )                                                                     \
     ACTION( REQ_REDIS_PING )                   /* redis requests - ping/quit */                     \
@@ -209,6 +217,7 @@ struct msg {
     uint32_t             mlen;            /* message length */
     int64_t              start_ts;        /* request start timestamp in usec */
 
+    int                  depth;
     int                  state;           /* current parser state */
     uint8_t              *pos;            /* parser position marker */
     uint8_t              *token;          /* token marker */
@@ -244,6 +253,7 @@ struct msg {
     uint8_t              *narg_end;       /* narg end (redis) */
     uint32_t             narg;            /* # arguments (redis) */
     uint32_t             rnarg;           /* running # arg used by parsing fsa (redis) */
+    uint32_t             rnargs[NC_MULTIBULK_DEPTH];           /* running # arg used by parsing fsa (redis) */
     uint32_t             rlen;            /* running length in parsing fsa (redis) */
     uint32_t             integer;         /* integer reply value (redis) */
 
