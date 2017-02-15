@@ -468,9 +468,7 @@ _log_switch(int level)
 }
 
 /*
- * main thread write to logbuffer 
- * other thread also write without mutex
- * maybe write dirty, but almost not
+ * all threads write to logbuffer 
  */
 void
 _log_write_buf(int level, char *buf, size_t len)
@@ -481,9 +479,9 @@ _log_write_buf(int level, char *buf, size_t len)
     struct logger *l = &logger;
     size_t length;
     size_t max_len;
-    struct log_buf *log_buffer;
 
-    
+    pthread_mutex_lock(&(l->log_mutex));
+    struct log_buf *log_buffer;
     while(len) {
         if (_log_switch(level)) {
             log_buffer = l->wflog_buf[0];
@@ -500,7 +498,6 @@ _log_write_buf(int level, char *buf, size_t len)
             }
         }
 
-        pthread_mutex_lock(&(l->log_mutex));
         max_len = log_buffer->end - log_buffer->pos;
         if (max_len < len) {
             length = max_len;
@@ -514,17 +511,17 @@ _log_write_buf(int level, char *buf, size_t len)
         if (log_buffer->pos > log_buffer->end) {
             log_buffer->pos = log_buffer->end;
         }  
-        pthread_mutex_unlock(&(l->log_mutex));
-    }    
+    }
+    pthread_mutex_unlock(&(l->log_mutex));    
 }
 
 /*
  * log format function
  */
-static char tem_buf[8 * LOG_MAX_LEN];
 void
 _log(int level, const char *file, int line, int panic, const char *fmt, ...)
 {
+    char tem_buf[8 * LOG_MAX_LEN];
     struct logger *l = &logger;
     int len, size;
     char *buf = tem_buf;
@@ -561,6 +558,7 @@ _log(int level, const char *file, int line, int panic, const char *fmt, ...)
 void
 _log_stderr(int level, const char *fmt, ...)
 {
+    char tem_buf[8 * LOG_MAX_LEN];
     struct logger *l = &logger;
     int len, size, errno_save;
     char *buf = tem_buf;
@@ -594,6 +592,7 @@ void
 _log_hexdump(int level, const char *file, int line, char *data, int datalen,
              const char *fmt, ...)
 {
+    char tem_buf[8 * LOG_MAX_LEN];
     struct logger *l = &logger;
     char *buf = tem_buf;
     int i, off, len, size;
@@ -651,6 +650,7 @@ _log_hexdump(int level, const char *file, int line, char *data, int datalen,
 void
 _log_safe(int level, const char *fmt, ...)
 {
+    char tem_buf[8 * LOG_MAX_LEN];
     struct logger *l = &logger;
     int len, size, errno_save;
     char *buf = tem_buf;
@@ -680,6 +680,7 @@ _log_safe(int level, const char *fmt, ...)
 void
 _log_stderr_safe(int level, const char *fmt, ...)
 {
+    char tem_buf[8 * LOG_MAX_LEN];
     struct logger *l = &logger;
     int len, size, errno_save;
     char *buf = tem_buf;
