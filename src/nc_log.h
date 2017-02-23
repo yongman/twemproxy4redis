@@ -14,26 +14,33 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include <nc_core.h>
 
 #ifndef _NC_LOG_H_
 #define _NC_LOG_H_
 
+
+struct log_buf{
+    size_t      start;      /* start of log_buf (const) */
+    size_t      end;        /* end of log_buf (const) */
+    size_t      pos;        /* operate marker */
+    char        name[64];   /* log_buf name, used when buf is full for trace */
+};
+
 struct logger {
-    char                *name;          /* log file name */
-    char                *wf_name;       /* wf log file name */
-    int                 level;          /* log level */
-    int                 nerror;         /* # flush mbuf error */
-    int                 fd;             /* log file descriptor */
-    int                 wfd;            /* log file descriptor */
-    char                *log_buf;       /* log mbuf header */
-    char                *wflog_buf;     /* wflog mbuf header */
-    size_t              log_buf_pos;    /* log buf read cursor */
-    size_t              log_buf_last;   /* log buf write cursor */
-    size_t              wflog_buf_pos;  /* wflog buf read cursor*/
-    size_t              wflog_buf_last; /* wflog buf write cursor */
-    pthread_t           log_thread;     /* log loop thread */
-    pthread_mutex_t     log_mutex;      /* buffer mutex */
-    int                 notify_fd[2];   /* pipe fd to notify log thread */
+    char                *name;              /* log file name */
+    char                *wf_name;           /* wf log file name */
+    int                 level;              /* log level */
+    int                 nerror;             /* # flush buf error */
+    int                 exchange_failed;    /* # flush buf error */
+    int                 fd;                 /* log file descriptor */
+    int                 wfd;                /* log file descriptor */
+    int                 discard_log_count;  /* discard log num */
+    int                 notify_fd[2];       /* pipe fd to notify log thread */
+    struct log_buf      *accesslog_buf[2];  /* access log buf array */
+    struct log_buf      *wflog_buf[2];      /* wf log buf array */
+    pthread_mutex_t     log_mutex;          /* pthread_mutex_lock use */
+    pthread_t           log_thread;         /* log loop thread */
 };
 
 #define LOG_SLOW    0   /* slow log don‘t conflict other log level */
@@ -51,12 +58,12 @@ struct logger {
 #define LOG_PVERB   12  /* periodic verbose messages on crack */
 #define LOG_ALWAYS  13  /* log always */
 
-#define LOG_FILENAME_LEN 256 /* max length of log message */
-#define LOG_MAX_LEN (8 * 256) /* max length of log message */
-#define LOG_BUF_SIZE (64 * 1024 * 1024)  /* log and wflog buf size*/
-
-#define LOG_COMMIT  0
+#define LOG_ACCESS  0
 #define LOG_WF      1
+
+#define LOG_MAX_LEN             (8 * 256)          /* max length of log message */
+#define LOG_BUF_OFFSET          (64 * 1024 * 1024) /* max log buf size*/
+#define LOG_BUF_CHUN_SIZE       (64 * 1024 * 1024) + sizeof(struct log_buf) /* logbuf chun size */ 
 
 /*
  * log_stderr   - log to stderr
@@ -142,7 +149,9 @@ int log_init(struct instance *nci);
 void log_deinit(void);                                                      
 void log_level_up(void);                                                    
 void log_level_down(void);                                                  
-void log_level_set(int level);                                             
+void log_level_set(int level); 
+void logbuf_exchange_period_up(void);
+void logbuf_exchange_period_down(void);                                            
 void log_stacktrace(void);                                                  
 void log_reopen(void);                                                      
 int log_loggable(int level); 
@@ -151,10 +160,19 @@ void _log(int level, const char *file, int line, int panic, const char *fmt, ...
 void _log_stderr(int level, const char *fmt, ...);                                     
 void _log_safe(int level, const char *fmt, ...);                                       
 void _log_stderr_safe(int level, const char *fmt, ...);                                
-void _log_hexdump(int level, const char *file, int line, char *data, int datalen, const char *fmt, ...);  
+void _log_hexdump(int level, const char *file, int line, char *data, int datalen, const char *fmt, ...);
+void log_singal_handler(void);  
+void log_cron(void);
+void _log_reopen(void);
+void _log_level_up(void);
+void _log_level_down(void);
+void _logbuf_exchange_period_up(void);
+void _logbuf_exchange_period_down(void);
+struct log_buf *_log_buf_get(char* name);
+int log_tick_task(void);
+int _swap_log_buf(void);
 void _log_level(int level, char *buf , int *pos);
 int _log_switch(int level);
-int _log_write_logbuf(char *dest, size_t *pos ,size_t *last, char *buf , int len);
-void _log_write_buf(int level, char *buf , int len);
+void _log_write_buf(int level, char *buf , size_t len);
 
 #endif

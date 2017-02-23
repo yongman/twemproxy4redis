@@ -475,7 +475,7 @@ check_out_slowlog(struct context *ctx, struct server_pool *sp, struct msg *msg) 
     if (kpos->end != NULL) {
         *(kpos->end) = '\0';
     }
-    log_slow("request_msg_id=%"PRIu64", client_address=%s, server_address=%s, cost_time=%"PRIu64"ms, fragment_id=%"PRIu64", request_type=%s, request_len %"PRIu32", response_len %"PRIu32", key='%s'",
+    log_slow("request_msg_id=%"PRIu64", client_address=%s, server_address=%s, cost_time=%"PRIu64"ms, fragment_id=%"PRIu64", request_type=%s, request_len=%"PRIu32", response_len=%"PRIu32", key='%s'",
         msg->id, client_host, server_host, cost_time ,msg->frag_id, req_type->data, req_len, rsp_len, kpos->start);  
 
 }

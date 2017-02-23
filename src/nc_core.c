@@ -367,6 +367,7 @@ core_core(void *arg, uint32_t events)
     return NC_OK;
 }
 
+
 static void
 core_tick(struct context *ctx)
 {
@@ -378,6 +379,7 @@ core_tick(struct context *ctx)
     }
 
     server_pool_tick(ctx);
+    log_cron();
 }
 
 rstatus_t
