@@ -2340,7 +2340,7 @@ redis_copy_bulk(struct msg *dst, struct msg *src)
                 }
             }
             mbuf->pos += len;
-            break;
+            break; 
         }
     }
 
