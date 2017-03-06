@@ -6,7 +6,8 @@ idc_to_region = {
    hz = "hz",
    sh = "sh",
    gz = "gz",
-   sz = "sz"
+   sz = "sz",
+   yq = "yq"
 }
 
 return idc_to_region
