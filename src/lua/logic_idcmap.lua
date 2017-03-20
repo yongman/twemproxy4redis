@@ -7,7 +7,8 @@ idc_to_region = {
    sh = "sh",
    gz = "gz",
    sz = "sz",
-   yq = "yq"
+   yq = "yq",
+   sz = "sz"
 }
 
 return idc_to_region
