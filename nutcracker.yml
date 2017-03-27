@@ -1,0 +1,18 @@
+db:
+  listen: 0.0.0.0:LISTEN_PORT
+  servers:
+  - SEEDIP:SEEDPORT:1
+  zone: tc
+  hash: crc16
+  distribution: random
+  redis: true
+  rediscluster: true
+  timeout: 1000
+  auto_eject_hosts: true
+  server_retry_timeout: 2000
+  server_failure_limit: 3
+  msg_max_length_limit: 65535
+  preconnect: true
+  env: offline
+  slowlog: true
+  slowlog_slower_than: 100
